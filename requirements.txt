@@ -1,0 +1,14 @@
+flask
+flask-cors
+flask-login
+flask-sqlalchemy
+flask-migrate
+python-dotenv
+requests
+beautifulsoup4
+openai
+yt-dlp
+pytesseract
+Pillow
+boto3
+gunicorn
