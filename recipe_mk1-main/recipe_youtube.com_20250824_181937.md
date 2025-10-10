@@ -1,0 +1,25 @@
+# Simple Chili Recipe
+
+**URL:** https://www.youtube.com/watch?v=ZT3GlECfYoU
+
+
+**Ingredients:**
+• 1,000g ground beef
+• 1 large onion
+• 6-8 cloves garlic
+• 30ml olive oil
+• salt
+• 400g crushed tomatoes
+• chili powder
+• cumin
+• 250ml beef broth
+• 1 can beans (optional)
+• 7.5g brown sugar
+
+**Method:**
+1. Heat 5ml oil in a pan over medium-high heat. Add 1,000g ground beef, breaking it up. Let it brown on one side for a couple of minutes, then flip and let it brown again.
+2. Finely chop 1 large onion and 6-8 cloves garlic. Heat 25ml olive oil in a pan, add the onion and garlic, and cook until they start to brown.
+3. Add salt, chili powder, and cumin to the pan and cook for a couple of minutes.
+4. Add 400g crushed tomatoes, 250ml beef broth, and the browned ground beef to the pan. Stir well.
+5. If using, add 1 can of beans (drained and rinsed) and 7.5g brown sugar to the pan.
+6. Simmer the chili over low heat for 30 minutes to 1 hour, stirring occasionally.
