@@ -15,10 +15,11 @@ import yt_dlp
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+
 
 app = Flask(__name__)
 CORS(app)
+load_dotenv()
 
 # Your existing RecipeScraper class (slightly modified for Flask)
 class RecipeScraper:
