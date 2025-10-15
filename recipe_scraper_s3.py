@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 import os
+import sys
+import subprocess
+import webbrowser
 import json
 import boto3
 from datetime import datetime
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, redirect, render_template, render_template_string, jsonify, request, session, url_for
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
@@ -14,11 +17,44 @@ import openai
 import yt_dlp
 from dotenv import load_dotenv
 from botocore.exceptions import ClientError, NoCredentialsError
+from PIL import Image, ImageOps
+import pytesseract
+import traceback
+from auth import auth_bp
+from models import User, db
+from admin import admin_bp
+from flask_migrate import Migrate
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
+from flask_sqlalchemy import SQLAlchemy
+
+
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# Use local SQLite DB directly, no env vars
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL").replace("postgres://", "postgresql://")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.getenv("SECRET_KEY", "default_secret")
+
+db = SQLAlchemy(app)
+
+
+migrate = Migrate(app, db)
+# db.init_app(app)
+
+app.register_blueprint(admin_bp, url_prefix='/admin')
+app.register_blueprint(auth_bp)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login' 
+
+with app.app_context():
+    db.create_all()
+
 
 class S3Storage:
     def __init__(self):
@@ -121,6 +157,91 @@ class RecipeScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
     
+    @app.route('/admin/dashboard')
+    def admin_dashboard():
+        username = current_user.username
+        users = User.query.all()
+        limits = {
+            'admin': 10,
+            'family': 5,
+            'user': 3
+        }
+        return render_template('admin_dashboard.html', username=username, users=users, limits=limits)
+
+    @app.route('/user/dashboard')
+    def user_dashboard():
+        return render_template('user_dashboard.html')
+
+    @app.route('/family/dashboard')
+    def family_dashboard():
+        return render_template('family_dashboard.html')
+
+
+    @app.route('/auth/login', methods=['POST'])
+    def login():
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.password == password:
+            login_user(user)
+
+            # Normalize and store role from DB
+            role = user.role.strip().lower()
+            session['role'] = user.role.strip().lower()
+
+            # Redirect based on role
+            if role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            elif role == 'family':
+                return redirect(url_for('family_dashboard'))
+            elif role == 'user':
+                return redirect(url_for('user_dashboard'))
+            else:
+                return "Invalid role in database", 403
+
+        return "Invalid credentials", 401
+
+    @app.route('/auth/register', methods=['POST'])
+    def register():
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role', 'user')
+
+        if User.query.filter_by(username=username).first():
+            return "Username already exists", 400
+
+        
+        new_user = User(username=username, password=password, role=role)
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('auth_page'))
+
+    @app.route('/auth/logout', methods=['GET'])
+    def logout():
+        logout_user()
+        return redirect(url_for('auth_page'))
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+    
+    
+    @app.route('/dashboard')
+    def dashboard():
+        role = session.get('role')
+        print("Session role:", role)  # Debug print
+
+        if role == 'admin':
+            return render_template('admin_dashboard.html')
+        elif role == 'family':
+            return render_template('family_dashboard.html')
+        elif role == 'user':
+            return render_template('user_dashboard.html')
+        else:
+            return "Invalid role", 403
+
     def is_youtube_url(self, url):
         youtube_patterns = [
             r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)',
@@ -475,7 +596,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recipe Manager</title>
+    <title>Churro's Recipes</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
     <style>
@@ -921,15 +1042,62 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 flex-direction: column;
             }
         }
+            .container {
+      padding: 2rem;
+      font-family: Arial, sans-serif;
+    }
+    .header {
+      margin-bottom: 2rem;
+    }
+    .auth-button {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+    }
+    .auth-button a {
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      color: white;
+    }
+    .logout {
+      background-color: #dc3545;
+    }
+    .login {
+      background-color: #007bff;
+    }
+
+
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Recipe Manager</h1>
-            <p>Manage your scraped recipes with cloud storage</p>
+            <h1>🍳 Churro's Recipes</h1>
+            <p>Manage your scraped recipes with a modern interface</p>
+        </div>
+        <div>
+
+        
+        <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px;">
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('dashboard') }}"
+                style="text-decoration: none; padding: 10px 20px; background-color: #2980b9; color: white; border-radius: 5px; font-weight: 500;">
+                Dashboard
+                </a>
+                <a href="{{ url_for('auth.logout') }}"
+                style="text-decoration: none; padding: 10px 20px; background-color: #c0392b; color: white; border-radius: 5px; font-weight: 500;">
+                Logout
+                </a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}"
+                style="text-decoration: none; padding: 10px 20px; background-color: #444; color: white; border-radius: 5px; font-weight: 500;">
+                Login
+                </a>
+            {% endif %}
         </div>
 
+        <!-- Add Recipe from URL Section -->
         <div class="add-recipe-section">
             <h2 class="section-title">Add Recipe from URL</h2>
             <p class="section-description">Scrape a new recipe from any website or YouTube video</p>
@@ -944,7 +1112,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
 
             <button class="btn" id="scrapeBtn" onclick="scrapeRecipe()">
-                <span id="scrapeText">Scrape Recipe</span>
+                <span id="scrapeText">🔍 Scrape Recipe</span>
             </button>
 
             <div class="progress-bar" id="progressBar" style="display: none;">
@@ -952,37 +1120,53 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
-        <div class="add-recipe-section">
-            <h2 class="section-title">Add Recipe from Photo</h2>
-            <p class="section-description">Upload a photo of a recipe or take a picture with your camera</p>
+        <!-- OCR Recipe Section -->
+       <div class="add-recipe-section">
+        <h2 class="section-title">Add Recipe from Photo</h2>
+        <p class="section-description">Upload a photo of a recipe or take a picture with your camera</p>
 
-            <div class="input-group">
-                <input 
-                    type="file" 
-                    class="input" 
-                    id="imageInput" 
-                    accept="image/*"
-                    capture="environment"
-                    style="display: none;"
-                >
-                <button class="btn btn-secondary" onclick="document.getElementById('imageInput').click()" style="width: 100%; margin-bottom: 1rem;">
-                    Choose Photo
-                </button>
-                
-                <div id="imagePreview" style="display: none; margin-bottom: 1rem;">
-                    <img id="previewImg" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #404040;">
-                </div>
-                
-                <textarea 
-                    id="ocrText" 
-                    class="textarea" 
-                    placeholder="OCR text will appear here. You can edit it before processing..."
-                    style="min-height: 200px; display: none;"
-                ></textarea>
+        <div class="input-group">
+            <!-- ✅ Updated input: allows both camera and gallery -->
+            <input 
+            type="file" 
+            class="input" 
+            id="imageInput" 
+            accept="image/*"
+            style="display: none;"
+            >
+
+            <!-- Trigger button -->
+            <button class="btn btn-secondary" onclick="document.getElementById('imageInput').click()" style="width: 100%; margin-bottom: 1rem;">
+            📷 Choose Photo
+            </button>
+
+            <!-- Image preview -->
+            <div id="imagePreview" style="display: none; margin-bottom: 1rem;">
+            <img id="previewImg" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #404040;">
             </div>
 
+            <!-- OCR text area -->
+            <textarea 
+            id="ocrText" 
+            class="textarea" 
+            placeholder="OCR text will appear here. You can edit it before processing..."
+            style="min-height: 200px; display: none;"
+            ></textarea>
+        </div>
+
+        <!-- OCR trigger button -->
+        <button class="btn" id="processOcrBtn" onclick="processOcrRecipe()" style="display: none;">
+            <span id="processOcrText">🔄 Extract Recipe</span>
+        </button>
+
+        <!-- Progress bar -->
+        <div class="progress-bar" id="ocrProgressBar" style="display: none;">
+            <div class="progress-fill" id="ocrProgressFill"></div>
+        </div>
+        </div>
+
             <button class="btn" id="processOcrBtn" onclick="processOcrRecipe()" style="display: none;">
-                <span id="processOcrText">Extract Recipe</span>
+                <span id="processOcrText">🔄 Extract Recipe</span>
             </button>
 
             <div class="progress-bar" id="ocrProgressBar" style="display: none;">
@@ -990,6 +1174,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
         </div>
 
+        <!-- Recipe Collection -->
         <div class="collection-header">
             <h2 class="section-title">Recipe Collection</h2>
             <p class="section-description">Click any recipe to expand and view details</p>
@@ -1003,10 +1188,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <button class="btn btn-secondary" onclick="refreshRecipeList()" style="margin-top: 1rem; width: 100%;">
-            Refresh List
+            📁 Refresh List
         </button>
     </div>
 
+    <!-- Edit Modal -->
     <div id="editModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1020,18 +1206,19 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
-                <button class="btn btn-success" onclick="saveRecipe()">Save Changes</button>
+                <button class="btn btn-success" onclick="saveRecipe()">💾 Save Changes</button>
             </div>
         </div>
     </div>
 
+    <!-- Confirm Delete Modal -->
     <div id="deleteModal" class="modal">
         <div class="confirm-dialog">
             <h3>Delete Recipe</h3>
             <p>Are you sure you want to delete this recipe? This action cannot be undone.</p>
             <div class="confirm-actions">
                 <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
-                <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+                <button class="btn btn-danger" onclick="confirmDelete()">🗑️</button>
             </div>
         </div>
     </div>
@@ -1121,10 +1308,54 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 console.error('Failed to load recipes:', error);
             }
         }
+        async function shareRecipe(name, url, event) {
+            event.stopPropagation(); // Prevent toggleRecipe from firing
+
+            try {
+                const filename = url.split('/').pop(); // Extract filename from URL
+                const response = await fetch(`/api/recipe/${encodeURIComponent(filename)}`);
+                const data = await response.json();
+                const recipeText = data.content;
+
+                const sharePayload = {
+                    title: name,
+                    text: `📖 ${name}\n\n${recipeText}`
+                };
+
+                if (navigator.share) {
+                    navigator.share(sharePayload).catch(err => {
+                        console.error('Share failed:', err);
+                        copyToClipboard(sharePayload.text);
+                    });
+                } else {
+                    copyToClipboard(sharePayload.text);
+                }
+            } catch (error) {
+                console.error('Failed to fetch recipe content:', error);
+                alert('Could not share recipe. Try again later.');
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Recipe copied to clipboard!');
+            }).catch(err => {
+                console.error('Clipboard copy failed:', err);
+                alert('Failed to copy recipe to clipboard.');
+            });
+        }
+
+        function fallbackCopy(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Recipe copied to clipboard!');
+            }).catch(err => {
+                console.error('Clipboard copy failed:', err);
+            });
+        }
 
         function renderRecipeList() {
             const listElement = document.getElementById('recipeList');
-            
+
             if (recipes.length === 0) {
                 listElement.innerHTML = `
                     <div class="empty-state">
@@ -1137,7 +1368,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             listElement.innerHTML = recipes.map(recipe => `
                 <div class="recipe-item ${expandedRecipe?.filename === recipe.filename ? 'expanded' : ''}" 
-                     onclick="toggleRecipe('${recipe.filename}')">
+                    onclick="toggleRecipe('${recipe.filename}')">
                     <div class="recipe-header">
                         <div class="recipe-info">
                             <div class="recipe-name">${recipe.name}</div>
@@ -1147,10 +1378,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                         </div>
                         <div class="recipe-actions">
                             <button class="btn btn-small btn-secondary" onclick="editRecipe('${recipe.filename}', event)" title="Edit Recipe">
-                                Edit
+                                ✏️
                             </button>
                             <button class="btn btn-small btn-danger" onclick="deleteRecipe('${recipe.filename}', event)" title="Delete Recipe">
-                                Delete
+                                🗑️
+                            </button>
+                            <button class="btn btn-small btn-outline-primary" 
+                                    onclick="shareRecipe('${recipe.name}', '${window.location.origin}/recipe/${recipe.filename}', event)" 
+                                    title="Share Recipe">
+                                🔗
                             </button>
                             <div class="expand-icon">
                                 ${expandedRecipe?.filename === recipe.filename ? '▼' : '▶'}
@@ -1167,6 +1403,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 </div>
             `).join('');
 
+            // Load content for expanded recipe
             if (expandedRecipe) {
                 loadRecipeContent(expandedRecipe.filename);
             }
@@ -1174,8 +1411,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
         async function toggleRecipe(filename) {
             if (expandedRecipe?.filename === filename) {
+                // Collapse if already expanded
                 expandedRecipe = null;
             } else {
+                // Expand new recipe
                 expandedRecipe = recipes.find(r => r.filename === filename);
             }
             
@@ -1186,6 +1425,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             try {
                 const content = await getRecipeContent(filename);
                 if (content) {
+                    // Configure marked for better list rendering
                     marked.setOptions({
                         breaks: true,
                         gfm: true
@@ -1244,13 +1484,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 closeEditModal();
                 await loadRecipeList();
                 
+                // Re-expand the recipe if it was expanded before
                 if (expandedRecipe?.filename === editingFilename) {
                     renderRecipeList();
                 }
                 
+                // Show success message briefly
                 const saveBtn = document.querySelector('.btn-success');
                 const originalText = saveBtn.textContent;
-                saveBtn.textContent = 'Saved!';
+                saveBtn.textContent = '✅ Saved!';
                 setTimeout(() => {
                     saveBtn.textContent = originalText;
                 }, 2000);
@@ -1274,6 +1516,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 await deleteRecipeFile(deletingFilename);
                 closeDeleteModal();
                 
+                // If the deleted recipe was expanded, clear the expansion
                 if (expandedRecipe?.filename === deletingFilename) {
                     expandedRecipe = null;
                 }
@@ -1307,10 +1550,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const progressBar = document.getElementById('progressBar');
             const progressFill = document.getElementById('progressFill');
 
+            // Update UI
             scrapeBtn.disabled = true;
-            scrapeText.textContent = 'Scraping...';
+            scrapeText.textContent = '🔄 Scraping...';
             progressBar.style.display = 'block';
             
+            // Simulate progress
             let progress = 0;
             const progressInterval = setInterval(() => {
                 progress += Math.random() * 15;
@@ -1321,23 +1566,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             try {
                 const result = await scrapeRecipeFromUrl(url);
                 
+                // Complete progress
                 clearInterval(progressInterval);
                 progressFill.style.width = '100%';
                 
+                // Refresh recipes list
                 await loadRecipeList();
                 
+                // Clear input
                 document.getElementById('urlInput').value = '';
                 
-                scrapeText.textContent = 'Recipe Added!';
+                // Success message
+                scrapeText.textContent = '✅ Recipe Added!';
                 setTimeout(() => {
-                    scrapeText.textContent = 'Scrape Recipe';
+                    scrapeText.textContent = '🔍 Scrape Recipe';
                 }, 2000);
                 
             } catch (error) {
                 clearInterval(progressInterval);
-                scrapeText.textContent = 'Failed to Scrape';
+                scrapeText.textContent = '❌ Failed to Scrape';
                 setTimeout(() => {
-                    scrapeText.textContent = 'Scrape Recipe';
+                    scrapeText.textContent = '🔍 Scrape Recipe';
                 }, 2000);
                 console.error('Scraping failed:', error);
                 alert('Failed to scrape recipe: ' + error.message);
@@ -1350,9 +1599,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
+        // OCR Functions
         document.getElementById('imageInput').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (file && file.type.startsWith('image/')) {
+                // Show preview
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const previewImg = document.getElementById('previewImg');
@@ -1360,6 +1611,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     previewImg.src = e.target.result;
                     imagePreview.style.display = 'block';
                     
+                    // Start OCR processing
                     performOCR(file);
                 };
                 reader.readAsDataURL(file);
@@ -1373,10 +1625,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const ocrProgressFill = document.getElementById('ocrProgressFill');
             
             try {
+                // Show progress
                 ocrProgressBar.style.display = 'block';
                 ocrText.value = 'Processing image...';
                 ocrText.style.display = 'block';
                 
+                // Perform OCR using Tesseract.js
                 const { data: { text } } = await Tesseract.recognize(
                     imageFile,
                     'eng',
@@ -1390,8 +1644,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     }
                 );
                 
+                // Complete progress
                 ocrProgressFill.style.width = '100%';
                 
+                // Display extracted text
                 ocrText.value = text.trim();
                 processOcrBtn.style.display = 'block';
                 
@@ -1427,10 +1683,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             const progressBar = document.getElementById('ocrProgressBar');
             const progressFill = document.getElementById('ocrProgressFill');
 
+            // Update UI
             processBtn.disabled = true;
-            processText.textContent = 'Extracting Recipe...';
+            processText.textContent = '🔄 Extracting Recipe...';
             progressBar.style.display = 'block';
             
+            // Simulate progress
             let progress = 0;
             const progressInterval = setInterval(() => {
                 progress += Math.random() * 15;
@@ -1454,27 +1712,31 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 
                 const result = await response.json();
                 
+                // Complete progress
                 clearInterval(progressInterval);
                 progressFill.style.width = '100%';
                 
+                // Refresh recipes list
                 await loadRecipeList();
                 
+                // Clear inputs
                 document.getElementById('imageInput').value = '';
                 document.getElementById('ocrText').value = '';
                 document.getElementById('imagePreview').style.display = 'none';
                 document.getElementById('ocrText').style.display = 'none';
                 document.getElementById('processOcrBtn').style.display = 'none';
                 
-                processText.textContent = 'Recipe Added!';
+                // Success message
+                processText.textContent = '✅ Recipe Added!';
                 setTimeout(() => {
-                    processText.textContent = 'Extract Recipe';
+                    processText.textContent = '🔄 Extract Recipe';
                 }, 2000);
                 
             } catch (error) {
                 clearInterval(progressInterval);
-                processText.textContent = 'Failed to Extract';
+                processText.textContent = '❌ Failed to Extract';
                 setTimeout(() => {
-                    processText.textContent = 'Extract Recipe';
+                    processText.textContent = '🔄 Extract Recipe';
                 }, 2000);
                 console.error('OCR processing failed:', error);
                 alert('Failed to extract recipe: ' + error.message);
@@ -1491,6 +1753,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             loadRecipeList();
         }
 
+        // Close modals when clicking outside
         window.addEventListener('click', function(event) {
             const editModal = document.getElementById('editModal');
             const deleteModal = document.getElementById('deleteModal');
@@ -1503,12 +1766,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         });
 
+        // Enter key support for URL input
         document.getElementById('urlInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 scrapeRecipe();
             }
         });
 
+        // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeEditModal();
@@ -1521,6 +1786,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             }
         });
 
+        // Initialize
         loadRecipeList();
     </script>
 </body>
@@ -1594,52 +1860,112 @@ def delete_recipe(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# @app.route('/api/ocr', methods=['POST'])
+# def process_ocr_text():
+    # try:
+    #     data = request.get_json()
+    #     ocr_text = data.get('text', '').strip()
+        
+    #     if not ocr_text:
+    #         return jsonify({'error': 'OCR text is required'}), 400
+        
+    #     scraped_data = {
+    #         'url': 'Photo Upload',
+    #         'title': 'Recipe from Photo',
+    #         'content': ocr_text,
+    #         'type': 'photo_ocr',
+    #         'scraped_at': datetime.now().isoformat()
+    #     }
+        
+    #     ai_response = scraper.parse_with_ai(scraped_data)
+        
+    #     if ai_response.strip() == "NO_RECIPE_FOUND":
+    #         return jsonify({'error': 'Could not extract a clear recipe from the image text. Please try a clearer photo or check if the image contains a recipe.'}), 400
+        
+    #     markdown_content = scraper.create_markdown(ai_response, scraped_data)
+        
+    #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    #     filename = f"recipe_photo_{timestamp}.md"
+        
+    #     if not storage.save_recipe(filename, markdown_content):
+    #         return jsonify({'error': 'Failed to save recipe to S3'}), 500
+        
+    #     recipe_name = "Photo Recipe"
+    #     if markdown_content.startswith('# '):
+    #         recipe_name = markdown_content.split('\n')[0][2:].strip()
+        
+    #     return jsonify({
+    #         'success': True,
+    #         'filename': filename,
+    #         'recipe_name': recipe_name,
+    #         'created': datetime.now().isoformat()
+    #     })
+        
+    # except Exception as e:
+    #     return jsonify({'error': str(e)}), 500
+
 @app.route('/api/ocr', methods=['POST'])
 def process_ocr_text():
     try:
         data = request.get_json()
         ocr_text = data.get('text', '').strip()
-        
+
         if not ocr_text:
             return jsonify({'error': 'OCR text is required'}), 400
-        
+
+        # Step 1: Preprocess OCR text (optional cleanup)
+        cleaned_text = '\n'.join([line.strip() for line in ocr_text.split('\n') if line.strip()])
+        if len(cleaned_text.split()) < 10:
+            return jsonify({'error': 'OCR text too short or unclear. Please try a better image.'}), 400
+
+        # Step 2: Build scraped data object
         scraped_data = {
             'url': 'Photo Upload',
             'title': 'Recipe from Photo',
-            'content': ocr_text,
+            'content': cleaned_text,
             'type': 'photo_ocr',
             'scraped_at': datetime.now().isoformat()
         }
-        
+
+        # Step 3: AI parsing
         ai_response = scraper.parse_with_ai(scraped_data)
-        
-        if ai_response.strip() == "NO_RECIPE_FOUND":
-            return jsonify({'error': 'Could not extract a clear recipe from the image text. Please try a clearer photo or check if the image contains a recipe.'}), 400
-        
+        if not ai_response or ai_response.strip() == "NO_RECIPE_FOUND":
+            return jsonify({
+                'error': 'Could not extract a clear recipe from the image text. Try a clearer photo or ensure it contains a recipe.'
+            }), 400
+
+        # Step 4: Markdown formatting
         markdown_content = scraper.create_markdown(ai_response, scraped_data)
-        
+        if not markdown_content or len(markdown_content.strip()) < 10:
+            return jsonify({'error': 'Failed to format recipe content'}), 500
+
+        # Step 5: Save to S3
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"recipe_photo_{timestamp}.md"
-        
-        if not storage.save_recipe(filename, markdown_content):
+        saved = storage.save_recipe(filename, markdown_content)
+
+        if not saved:
             return jsonify({'error': 'Failed to save recipe to S3'}), 500
-        
-        recipe_name = "Photo Recipe"
-        if markdown_content.startswith('# '):
-            recipe_name = markdown_content.split('\n')[0][2:].strip()
-        
+
+        # Step 6: Extract recipe name
+        recipe_name = markdown_content.split('\n')[0][2:].strip() if markdown_content.startswith('# ') else "Photo Recipe"
+
+        # Step 7: Return success response
         return jsonify({
             'success': True,
             'filename': filename,
             'recipe_name': recipe_name,
-            'created': datetime.now().isoformat()
+            'created': datetime.now().isoformat(),
+            'preview': markdown_content[:300] + '...'  # Optional preview
         })
-        
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 @app.route('/api/scrape', methods=['POST'])
 def scrape_recipe():
+    """Scrape a new recipe from URL"""
     try:
         data = request.get_json()
         url = data.get('url', '').strip()
@@ -1650,6 +1976,7 @@ def scrape_recipe():
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
         
+        # Use the scraper to process the URL
         result = scraper.scrape_and_save(url)
         
         return jsonify({

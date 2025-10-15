@@ -4,7 +4,7 @@ import os
 import json
 import glob
 from datetime import datetime
-from flask import Flask, render_template_string, jsonify, request, send_from_directory
+from flask import Flask, redirect, render_template, render_template_string, jsonify, request, send_from_directory, session, url_for
 from flask_cors import CORS
 import requests
 from bs4 import BeautifulSoup
@@ -13,31 +13,166 @@ from urllib.parse import urlparse
 import openai
 import yt_dlp
 from dotenv import load_dotenv
+from flask import Flask
+from models import User, db
+from flask_migrate import Migrate
+from flask_login import LoginManager, current_user, login_user, logout_user, login_required
+from flask_sqlalchemy import SQLAlchemy
+from auth import auth_bp
+from admin import admin_bp
 
-# Load environment variables from .env file
 
-
+load_dotenv()
 app = Flask(__name__)
 CORS(app)
-load_dotenv()
 
-# Your existing RecipeScraper class (slightly modified for Flask)
+
+# Use local SQLite DB directly, no env vars
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+DB_PATH = os.path.join(BASE_DIR, 'instance', 'recipes.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DB_PATH}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.getenv("SECRET_KEY", "default_secret")
+
+
+# db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+db.init_app(app)
+
+
+# Register your auth blueprint
+app.register_blueprint(admin_bp, url_prefix='/admin')
+app.register_blueprint(auth_bp)
+
+
+# Setup login manager
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'auth.login'  # optional: redirect unauthenticated users
+
+
+
+with app.app_context():
+    db.create_all()
+
 class RecipeScraper:
+    
     def __init__(self):
         api_key = os.getenv('GROQ_API_KEY')
         if not api_key:
             raise ValueError("GROQ_API_KEY environment variable is required")
         
+        
         self.ai_client = openai.OpenAI(
             api_key=api_key,
             base_url="https://api.groq.com/openai/v1"
         )
-        
+
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
+
+    @app.route('/auth', methods=['GET'])
+    def auth_page():
+        return render_template('auth_page.html')  # This will show both login and signup forms
+
+
+        return """
+        <html>
+        <head><title>Test Page</title></head>
+        <body>
+            <h1>Hello, this is a test!</h1>
+        </body>
+        </html>
+        """
+    @app.route('/admin/dashboard')
+    def admin_dashboard():
+        username = current_user.username
+        users = User.query.all()
+        limits = {
+            'admin': 10,
+            'family': 5,
+            'user': 3
+        }
+        return render_template('admin_dashboard.html', username=username, users=users, limits=limits)
+
+    @app.route('/user/dashboard')
+    def user_dashboard():
+        return render_template('user_dashboard.html')
+
+    @app.route('/family/dashboard')
+    def family_dashboard():
+        return render_template('family_dashboard.html')
+
+
+    @app.route('/auth/login', methods=['POST'])
+    def login():
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.password == password:
+            login_user(user)
+
+            # Normalize and store role from DB
+            role = user.role.strip().lower()
+            session['role'] = user.role.strip().lower()
+
+            # Redirect based on role
+            if role == 'admin':
+                return redirect(url_for('admin_dashboard'))
+            elif role == 'family':
+                return redirect(url_for('family_dashboard'))
+            elif role == 'user':
+                return redirect(url_for('user_dashboard'))
+            else:
+                return "Invalid role in database", 403
+
+        return "Invalid credentials", 401
+
+    @app.route('/auth/register', methods=['POST'])
+    def register():
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role', 'user')
+
+        if User.query.filter_by(username=username).first():
+            return "Username already exists", 400
+
+        
+        new_user = User(username=username, password=password, role=role)
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('auth_page'))
+
+    @app.route('/auth/logout', methods=['GET'])
+    def logout():
+        logout_user()
+        return redirect(url_for('auth_page'))
     
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
+
+
+
+    @app.route('/dashboard')
+    def dashboard():
+        role = session.get('role')
+        print("Session role:", role)  # Debug print
+
+        if role == 'admin':
+            return render_template('admin_dashboard.html')
+        elif role == 'family':
+            return render_template('family_dashboard.html')
+        elif role == 'user':
+            return render_template('user_dashboard.html')
+        else:
+            return "Invalid role", 403
+
+
     def is_youtube_url(self, url):
         youtube_patterns = [
             r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)',
@@ -842,6 +977,32 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 flex-direction: column;
             }
         }
+            .container {
+      padding: 2rem;
+      font-family: Arial, sans-serif;
+    }
+    .header {
+      margin-bottom: 2rem;
+    }
+    .auth-button {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+    }
+    .auth-button a {
+      text-decoration: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      color: white;
+    }
+    .logout {
+      background-color: #dc3545;
+    }
+    .login {
+      background-color: #007bff;
+    }
+
+
     </style>
 </head>
 <body>
@@ -849,6 +1010,26 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="header">
             <h1>🍳 Churro's Recipes</h1>
             <p>Manage your scraped recipes with a modern interface</p>
+        </div>
+        <div>
+
+        
+        <div style="position: absolute; top: 20px; right: 20px; display: flex; gap: 10px;">
+            {% if current_user.is_authenticated %}
+                <a href="{{ url_for('dashboard') }}"
+                style="text-decoration: none; padding: 10px 20px; background-color: #2980b9; color: white; border-radius: 5px; font-weight: 500;">
+                Dashboard
+                </a>
+                <a href="{{ url_for('auth.logout') }}"
+                style="text-decoration: none; padding: 10px 20px; background-color: #c0392b; color: white; border-radius: 5px; font-weight: 500;">
+                Logout
+                </a>
+            {% else %}
+                <a href="{{ url_for('auth.login') }}"
+                style="text-decoration: none; padding: 10px 20px; background-color: #444; color: white; border-radius: 5px; font-weight: 500;">
+                Login
+                </a>
+            {% endif %}
         </div>
 
         <!-- Add Recipe from URL Section -->
@@ -875,34 +1056,49 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <!-- OCR Recipe Section -->
-        <div class="add-recipe-section">
-            <h2 class="section-title">Add Recipe from Photo</h2>
-            <p class="section-description">Upload a photo of a recipe or take a picture with your camera</p>
+       <div class="add-recipe-section">
+        <h2 class="section-title">Add Recipe from Photo</h2>
+        <p class="section-description">Upload a photo of a recipe or take a picture with your camera</p>
 
-            <div class="input-group">
-                <input 
-                    type="file" 
-                    class="input" 
-                    id="imageInput" 
-                    accept="image/*"
-                    capture="environment"
-                    style="display: none;"
-                >
-                <button class="btn btn-secondary" onclick="document.getElementById('imageInput').click()" style="width: 100%; margin-bottom: 1rem;">
-                    📷 Choose Photo
-                </button>
-                
-                <div id="imagePreview" style="display: none; margin-bottom: 1rem;">
-                    <img id="previewImg" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #404040;">
-                </div>
-                
-                <textarea 
-                    id="ocrText" 
-                    class="textarea" 
-                    placeholder="OCR text will appear here. You can edit it before processing..."
-                    style="min-height: 200px; display: none;"
-                ></textarea>
+        <div class="input-group">
+            <!-- ✅ Updated input: allows both camera and gallery -->
+            <input 
+            type="file" 
+            class="input" 
+            id="imageInput" 
+            accept="image/*"
+            style="display: none;"
+            >
+
+            <!-- Trigger button -->
+            <button class="btn btn-secondary" onclick="document.getElementById('imageInput').click()" style="width: 100%; margin-bottom: 1rem;">
+            📷 Choose Photo
+            </button>
+
+            <!-- Image preview -->
+            <div id="imagePreview" style="display: none; margin-bottom: 1rem;">
+            <img id="previewImg" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 1px solid #404040;">
             </div>
+
+            <!-- OCR text area -->
+            <textarea 
+            id="ocrText" 
+            class="textarea" 
+            placeholder="OCR text will appear here. You can edit it before processing..."
+            style="min-height: 200px; display: none;"
+            ></textarea>
+        </div>
+
+        <!-- OCR trigger button -->
+        <button class="btn" id="processOcrBtn" onclick="processOcrRecipe()" style="display: none;">
+            <span id="processOcrText">🔄 Extract Recipe</span>
+        </button>
+
+        <!-- Progress bar -->
+        <div class="progress-bar" id="ocrProgressBar" style="display: none;">
+            <div class="progress-fill" id="ocrProgressFill"></div>
+        </div>
+        </div>
 
             <button class="btn" id="processOcrBtn" onclick="processOcrRecipe()" style="display: none;">
                 <span id="processOcrText">🔄 Extract Recipe</span>
@@ -1047,10 +1243,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 console.error('Failed to load recipes:', error);
             }
         }
+        function shareRecipe(name, url, event) {
+            event.stopPropagation(); // Prevent toggleRecipe from firing
+
+            if (navigator.share) {
+                navigator.share({
+                    title: name,
+                    text: `Check out this recipe: ${name}`,
+                    url: url
+                }).catch(err => console.error('Share failed:', err));
+            } else {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('Recipe link copied to clipboard!');
+                }).catch(err => {
+                    console.error('Clipboard copy failed:', err);
+                });
+            }
+        }
 
         function renderRecipeList() {
             const listElement = document.getElementById('recipeList');
-            
+
             if (recipes.length === 0) {
                 listElement.innerHTML = `
                     <div class="empty-state">
@@ -1063,7 +1276,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
             listElement.innerHTML = recipes.map(recipe => `
                 <div class="recipe-item ${expandedRecipe?.filename === recipe.filename ? 'expanded' : ''}" 
-                     onclick="toggleRecipe('${recipe.filename}')">
+                    onclick="toggleRecipe('${recipe.filename}')">
                     <div class="recipe-header">
                         <div class="recipe-info">
                             <div class="recipe-name">${recipe.name}</div>
@@ -1077,6 +1290,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                             </button>
                             <button class="btn btn-small btn-danger" onclick="deleteRecipe('${recipe.filename}', event)" title="Delete Recipe">
                                 🗑️
+                            </button>
+                            <button class="btn btn-small btn-outline-primary" 
+                                    onclick="shareRecipe('${recipe.name}', '${window.location.origin}/recipe/${recipe.filename}', event)" 
+                                    title="Share Recipe">
+                                🔗
                             </button>
                             <div class="expand-icon">
                                 ${expandedRecipe?.filename === recipe.filename ? '▼' : '▶'}
@@ -1481,6 +1699,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </script>
 </body>
 </html>"""
+
 
 @app.route('/')
 def index():

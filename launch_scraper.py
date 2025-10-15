@@ -57,7 +57,7 @@ def start_flask_app():
     """Start the Flask application"""
     try:
         # Import and run the Flask app
-        from recipe_scraper_local import app
+        from recipe_scraper_s3 import app
         
         print("🍳 Starting Recipe Scraper UI...")
         print("📺 Supports YouTube videos and web recipes!")
@@ -82,6 +82,8 @@ def start_flask_app():
     except Exception as e:
         print(f"❌ Error starting application: {e}")
         sys.exit(1)
+
+
 
 def main():
     """Main function"""
