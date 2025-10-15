@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      height: 100vh;
+      background-color: #f4f6f8;
+    }
+
+    .sidebar {
+      width: 220px;
+      background-color: #2c3e50;
+      color: white;
+      padding: 20px;
+    }
+
+    .sidebar h2 {
+      margin-bottom: 30px;
+      font-size: 20px;
+    }
+
+    .sidebar a {
+      display: block;
+      color: white;
+      text-decoration: none;
+      margin: 15px 0;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .sidebar a:hover {
+      text-decoration: underline;
+    }
+
+    .main {
+      flex: 1;
+      padding: 30px;
+      overflow-y: auto;
+    }
+
+    .header {
+      margin-bottom: 20px;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    select, input[type="number"] {
+      padding: 6px;
+      border-radius: 4px;
+      width: 100%;
+    }
+
+    button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-sm {
+      font-size: 14px;
+      margin-right: 5px;
+    }
+
+    .recipe-item {
+      border: 1px solid #ddd;
+      margin-bottom: 10px;
+      padding: 10px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .recipe-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .recipe-info .recipe-name {
+      font-weight: bold;
+      font-size: 16px;
+    }
+
+    .recipe-meta {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .recipe-actions button {
+      margin-left: 5px;
+    }
+
+    .expand-icon {
+      margin-left: 10px;
+      font-size: 18px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 2rem;
+      color: #737373;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Admin Panel</h2>
+    <a onclick="showSection('users')">Users</a>
+    <!-- <a onclick="showSection('recipe')">Recipes</a> -->
+    <a onclick="showSection('settings')">Settings</a>
+    <!-- <a onclick="showSection('limits')">Usage Limits</a> -->
+    <a href="{{ url_for('auth.logout') }}">Logout</a>
+  </div>
+
+  <div class="main">
+    <div class="header">
+      <h1>Welcome, {{ username }}!</h1>
+    </div>
+
+    <!-- Users Section -->
+    <div id="users" class="section active">
+      <h2>User Management</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Update</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>{{ user.username }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('admin_bp.update_user_role', user_id=user.id) }}">
+                <select name="role">
+                  <option value="user" {% if user.role == 'user' %}selected{% endif %}>User</option>
+                  <option value="family" {% if user.role == 'family' %}selected{% endif %}>Family</option>
+                  <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                </select>
+            </td>
+            <td>
+                <button type="submit">Save</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Recipes Section -->
+    <div id="recipe" class="section">
+      <h2>Recipe Management</h2>
+      <p>Here you can view, edit, or delete uploaded recipes.</p>
+      <div id="recipeList"></div>
+    </div>
+
+    <!-- Settings Section -->
+    <div id="settings" class="section">
+      <h2>Admin Settings</h2>
+      <p>Configure dashboard preferences, access controls, or integrations here.</p>
+    </div>
+
+    <!-- Usage Limits Section -->
+    <div id="limits" class="section">
+      <h2>Weekly Usage Limits</h2>
+      <form method="POST" action="{{ url_for('admin_bp.update_limits') }}">
+        <table>
+          <thead>
+            <tr>
+              <th>Role</th>
+              <th>Weekly Limit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for role in ['user', 'family', 'admin'] %}
+            <tr>
+              <td>{{ role.capitalize() }}</td>
+              <td>
+                <input type="number" name="limit_{{ role }}" value="{{ limits[role] }}" min="0" />
+              </td>
+            </tr>
+            {% endfor %}k
+          </tbody>
+        </table>
+        <button type="submit">Save Limits</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // const recipeData = {{ recipe | tojson }};
+    let expandedRecipe = null;
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(section => {
+        section.classList.remove('active');
+      });
+      document.getElementById(id).classList.add('active');
+      if (id === 'recipe') renderRecipeList();
+    }
+
+    function toggleRecipe(filename) {
+      expandedRecipe = expandedRecipe?.filename === filename ? null : { filename };
+      renderRecipeList();
+    }
+
+    function loadRecipeContent(filename) {
+      fetch(`/api/recipe/${filename}`)
+        .then(res => res.text())
+        .then(html => {
+          document.getElementById(`content-${filename}`).innerHTML = html;
+        })
+        .catch(() => {
+          document.getElementById(`content-${filename}`).innerHTML = `<div style="color:red;">Failed to load recipe.</div>`;
+        });
+    }
+
+    function shareRecipe(name, url, event) {
+      event.stopPropagation();
+      if (navigator.share) {
+        navigator.share({ title: name, text: `Check out this recipe: ${name}`, url: url })
+          .catch(err => console.error('Share failed:', err));
+      } else {
+        navigator.clipboard.writeText(url).then(() => {
+          alert('Recipe link copied to clipboard!');
+        }).catch(err => {
+          console.error('Clipboard copy failed:', err);
+        });
+      }
+    }
+
+    function renderRecipeList() {
+      const listElement = document.getElementById('recipeList');
+      if (!recipe || recipe.length === 0) {
+        listElement.innerHTML = `
+          <div class="empty-state">
+            <h3>No recipes found</h3>
+            <p>Add your first recipe by entering a URL above</p>
+          </div>
+        `;
+        return;
+      }
+
+      listElement.innerHTML = recipe.map(recipe => `
+        <div class="recipe-item ${expandedRecipe?.filename === recipe.filename ? 'expanded' : ''}" onclick="toggleRecipe('${recipe.filename}')">
+          <div class="recipe-header">
+            <div class="recipe-info">
+              <div class="recipe-name">${recipe.title}</div>
+              <div class="recipe-meta">${new Date(recipe.created).toLocaleDateString()} • ${recipe.filename}</div>
+            </div>
+            <div class="recipe-actions">
+              <form method="GET" action="/edit/${recipe.filename}" style="display:inline;">
+                <button class="btn-sm" title="Edit Recipe">✏️</button>
+              </form>
+              <form method="POST" action="/delete/${recipe.filename}" style="display:inline;">
+                <button class="btn-sm" title="Delete Recipe">🗑️</button>
+              </form>
+                            <button class="btn-sm" title="Share Recipe"
+                      onclick="shareRecipe('${recipe.title}', '${window.location.origin}/recipe/${recipe.filename}', event)">
+                🔗
+              </button>
+              <div class="expand-icon">
+                ${expandedRecipe?.filename === recipe.filename ? '▼' : '▶'}
+              </div>
+            </div>
+          </div>
+          ${expandedRecipe?.filename === recipe.filename ? `
+            <div class="recipe-content" id="content-${recipe.filename}">
+              <div style="text-align: center; padding: 2rem; color: #737373;">
+                Loading recipe...
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `).join('');
+
+      if (expandedRecipe) {
+        loadRecipeContent(expandedRecipe.filename);
+      }
+    }
+
+    // Auto-render if Recipes section is active on load
+    window.addEventListener('DOMContentLoaded', () => {
+      if (document.getElementById('recipe').classList.contains('active')) {
+        renderRecipeList();
+      }
+    });
+  </script>
+</body>
+</html>
