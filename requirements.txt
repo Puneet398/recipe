@@ -57,7 +57,6 @@ Deprecated==1.2.18
 dirtyjson==1.0.8
 distlib==0.3.7
 distro==1.9.0
-dlib @ file:///C:/Users/punee/OneDrive/Desktop/Attendance/myenv38/dlib-19.24.1-cp311-cp311-win_amd64.whl#sha256=6f1a5ee167975d7952b28e0ce4495f1d9a77644761cf5720fb66d7c6188ae496
 dnspython==2.8.0
 docutils==0.20.1
 durationpy==0.10
