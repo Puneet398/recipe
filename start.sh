@@ -1,2 +1,2 @@
 #!/bin/bash
-gunicorn launch_scraper:app
+gunicorn recipe_scraper_s3:app
