@@ -40,7 +40,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 app.secret_key = os.getenv("SECRET_KEY", "default_secret")
 
-db = SQLAlchemy()
+# db = SQLAlchemy(app)
 
 
 migrate = Migrate(app, db)
@@ -180,81 +180,13 @@ class RecipeScraper:
 
 # from flask import request, session, redirect, url_for
 # from flask_login import login_user
-    @app.route('/update-user-roles', methods=['POST'])
-    @login_required
-    def update_user_roles():
-        if current_user.role.lower() != 'admin':
-            return redirect('/dashboard')
-
-        users = User.query.all()
-        for user in users:
-            new_role = request.form.get(f'role_{user.id}')
-            if new_role and new_role != user.role:
-                user.role = new_role
-        db.session.commit()
-        return redirect('/dashboard')
-    
-    @app.route('/auth/login', methods=['POST'])
-    def login():
-        username = request.form.get('username')
-        password = request.form.get('password')
-
-        user = User.query.filter_by(username=username).first()
-
-        if user and user.password == password:
-            login_user(user)
-
-            # Normalize and store role from DB
-            role = user.role.strip().lower()
-            session['role'] = role
-
-            return redirect('/dashboard')
-
-        # Optional: handle login failure
-        return redirect('/login')
-
-
-        # return "Invalid credentials", 401
-
-    @app.route('/auth/register', methods=['POST'])
-    def register():
-        username = request.form.get('username')
-        password = request.form.get('password')
-        role = request.form.get('role', 'user')
-
-        if User.query.filter_by(username=username).first():
-            return "Username already exists", 400
-
-        
-        new_user = User(username=username, password=password, role=role)
-        db.session.add(new_user)
-        db.session.commit()
-        return redirect(url_for('auth_page'))
-
-    @app.route('/auth/logout', methods=['GET'])
-    def logout():
-        logout_user()
-        return redirect(url_for('auth_page'))
     
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
     
     
-    @app.route('/dashboard')
-    def dashboard():
-        role = session.get('role')  # Assuming role is stored in session
-
-        if role == 'admin':
-            return render_template('admin_dashboard.html')
-        elif role == 'family':
-            return render_template('family_dashboard.html')
-        elif role == 'user':
-            return render_template('user_dashboard.html')
-        else:
-            return redirect(url_for('login'))  # Or show an error page
-
-
+ 
     def is_youtube_url(self, url):
         youtube_patterns = [
             r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)',
@@ -1804,6 +1736,77 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </script>
 </body>
 </html>"""
+
+
+@app.route('/dashboard')
+def dashboard():
+        role = session.get('role')  # Assuming role is stored in session
+
+        if role == 'admin':
+            return render_template('admin_dashboard.html')
+        elif role == 'family':
+            return render_template('family_dashboard.html')
+        elif role == 'user':
+            return render_template('user_dashboard.html')
+        else:
+            return redirect(url_for('login'))  # Or show an error page
+
+@app.route('/update-user-roles', methods=['POST'])
+@login_required
+def update_user_roles():
+        if current_user.role.lower() != 'admin':
+            return redirect('/dashboard')
+
+        users = User.query.all()
+        for user in users:
+            new_role = request.form.get(f'role_{user.id}')
+            if new_role and new_role != user.role:
+                user.role = new_role
+        db.session.commit()
+        return redirect('/dashboard')
+    
+@app.route('/auth/login', methods=['POST'])
+def login():
+        username = request.form.get('username')
+        password = request.form.get('password')
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.password == password:
+            login_user(user)
+
+            # Normalize and store role from DB
+            role = user.role.strip().lower()
+            session['role'] = role
+
+            return redirect('/dashboard')
+
+        # Optional: handle login failure
+        return redirect('/login')
+
+
+        # return "Invalid credentials", 401
+
+@app.route('/auth/register', methods=['POST'])
+def register():
+        username = request.form.get('username')
+        password = request.form.get('password')
+        role = request.form.get('role', 'user')
+
+        if User.query.filter_by(username=username).first():
+            return "Username already exists", 400
+
+        
+        new_user = User(username=username, password=password, role=role)
+        db.session.add(new_user)
+        db.session.commit()
+        return redirect(url_for('auth_page'))
+
+@app.route('/auth/logout', methods=['GET'])
+def logout():
+    logout_user()
+    return redirect(url_for('auth_page'))
+    
 
 @app.route('/')
 def index():
