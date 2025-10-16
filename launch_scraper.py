@@ -11,6 +11,8 @@ import webbrowser
 import time
 from pathlib import Path
 
+app = Flask(__name__)
+
 def check_dependencies():
     """Check if required packages are installed"""
     # Map package names to their import names
