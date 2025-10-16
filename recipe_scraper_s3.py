@@ -22,7 +22,7 @@ import pytesseract
 import traceback
 from auth import auth_bp
 from models import User, db
-from admin import admin_bp
+# from admin import admin_bp
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from flask_sqlalchemy import SQLAlchemy
@@ -35,17 +35,18 @@ app = Flask(__name__)
 CORS(app)
 
 # Use local SQLite DB directly, no env vars
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL").replace("postgres://", "postgresql://")
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 app.secret_key = os.getenv("SECRET_KEY", "default_secret")
 
-db = SQLAlchemy(app)
+# db = SQLAlchemy(app)
 
 
 migrate = Migrate(app, db)
-# db.init_app(app)
+db.init_app(app)
 
-app.register_blueprint(admin_bp, url_prefix='/admin')
+# app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(auth_bp)
 
 login_manager = LoginManager()
@@ -157,26 +158,42 @@ class RecipeScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
     
-    @app.route('/admin/dashboard')
-    def admin_dashboard():
-        username = current_user.username
+    # @app.route('/admin/dashboard')
+    # def admin_dashboard():
+    #     username = current_user.username
+    #     users = User.query.all()
+    #     limits = {
+    #         'admin': 10,
+    #         'family': 5,
+    #         'user': 3
+    #     }
+    #     return render_template('admin_dashboard.html', username=username, users=users, limits=limits)
+
+    # @app.route('/user/dashboard')
+    # def user_dashboard():
+    #     return render_template('user_dashboard.html')
+
+    # @app.route('/family/dashboard')
+    # def family_dashboard():
+    #     return render_template('family_dashboard.html')
+
+
+# from flask import request, session, redirect, url_for
+# from flask_login import login_user
+    @app.route('/update-user-roles', methods=['POST'])
+    @login_required
+    def update_user_roles():
+        if current_user.role.lower() != 'admin':
+            return redirect('/dashboard')
+
         users = User.query.all()
-        limits = {
-            'admin': 10,
-            'family': 5,
-            'user': 3
-        }
-        return render_template('admin_dashboard.html', username=username, users=users, limits=limits)
-
-    @app.route('/user/dashboard')
-    def user_dashboard():
-        return render_template('user_dashboard.html')
-
-    @app.route('/family/dashboard')
-    def family_dashboard():
-        return render_template('family_dashboard.html')
-
-
+        for user in users:
+            new_role = request.form.get(f'role_{user.id}')
+            if new_role and new_role != user.role:
+                user.role = new_role
+        db.session.commit()
+        return redirect('/dashboard')
+    
     @app.route('/auth/login', methods=['POST'])
     def login():
         username = request.form.get('username')
@@ -189,19 +206,15 @@ class RecipeScraper:
 
             # Normalize and store role from DB
             role = user.role.strip().lower()
-            session['role'] = user.role.strip().lower()
+            session['role'] = role
 
-            # Redirect based on role
-            if role == 'admin':
-                return redirect(url_for('admin_dashboard'))
-            elif role == 'family':
-                return redirect(url_for('family_dashboard'))
-            elif role == 'user':
-                return redirect(url_for('user_dashboard'))
-            else:
-                return "Invalid role in database", 403
+            return redirect('/dashboard')
 
-        return "Invalid credentials", 401
+        # Optional: handle login failure
+        return redirect('/login')
+
+
+        # return "Invalid credentials", 401
 
     @app.route('/auth/register', methods=['POST'])
     def register():
@@ -230,8 +243,7 @@ class RecipeScraper:
     
     @app.route('/dashboard')
     def dashboard():
-        role = session.get('role')
-        print("Session role:", role)  # Debug print
+        role = session.get('role')  # Assuming role is stored in session
 
         if role == 'admin':
             return render_template('admin_dashboard.html')
@@ -240,7 +252,8 @@ class RecipeScraper:
         elif role == 'user':
             return render_template('user_dashboard.html')
         else:
-            return "Invalid role", 403
+            return redirect(url_for('login'))  # Or show an error page
+
 
     def is_youtube_url(self, url):
         youtube_patterns = [
