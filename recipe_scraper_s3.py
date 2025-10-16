@@ -32,7 +32,7 @@ from flask_sqlalchemy import SQLAlchemy
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+# CORS(app)
 
 # Use local SQLite DB directly, no env vars
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
@@ -1985,6 +1985,13 @@ def scrape_recipe():
     try:
         data = request.get_json()
         url = data.get('url', '').strip()
+
+        ydl_opts = {
+            'cookies': 'cookies.txt',
+            'quiet': True,
+            'outtmpl': '%(title)s.%(ext)s'
+        }
+
         
         if not url:
             return jsonify({'error': 'URL is required'}), 400
