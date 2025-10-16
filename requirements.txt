@@ -12,3 +12,12 @@ pytesseract
 Pillow
 boto3
 gunicorn
+psycopg2-binary
+Werkzeug
+itsdangerous
+email-validator
+Flask-Limiter
+Flask-Caching
+tqdm
+loguru
+validators
