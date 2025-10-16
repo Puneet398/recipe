@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-gunicorn app:app --bind 0.0.0.0:$PORT
+gunicorn launch_scraper:app --bind 0.0.0.0:$PORT
