@@ -124,4 +124,4 @@ if __name__ == "__main__":
 
 # ✅ Expose app for Gunicorn
 # Gunicorn will look for this when running: gunicorn launch_scraper:app
-app = app
+# app = app
