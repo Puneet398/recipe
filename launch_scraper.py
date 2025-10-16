@@ -53,37 +53,36 @@ def check_groq_api_key():
     
     return True
 
+# ✅ Import and expose Flask app for Gunicorn
+try:
+    from recipe_scraper_s3 import app
+except ImportError:
+    print("❌ Could not import Flask app")
+    print("💡 Make sure 'recipe_scraper_s3.py' is in the same directory")
+    sys.exit(1)
+
 def start_flask_app():
     """Start the Flask application"""
     try:
-        # Import and run the Flask app
-        from recipe_scraper_s3 import app
-        
         print("🍳 Starting Recipe Scraper UI...")
         print("📺 Supports YouTube videos and web recipes!")
         print("🌐 Opening browser to: http://localhost:5000")
         print("=" * 50)
-        
-        # Open browser after a short delay
-        def open_browser():
-            time.sleep(1.5)
-            webbrowser.open('http://localhost:5000')
-        
-        import threading
-        threading.Thread(target=open_browser, daemon=True).start()
-        
-        # Start Flask app
+
+        # ✅ Skip browser launch on Render
+        if os.getenv("RENDER") != "true":
+            def open_browser():
+                time.sleep(1.5)
+                webbrowser.open('http://localhost:5000')
+            import threading
+            threading.Thread(target=open_browser, daemon=True).start()
+
+        # Start Flask app locally
         app.run(debug=False, host='0.0.0.0', port=5000, use_reloader=False)
-        
-    except ImportError:
-        print("❌ Could not import Flask app")
-        print("💡 Make sure 'recipe_scraper_ui.py' is in the same directory")
-        sys.exit(1)
+
     except Exception as e:
         print(f"❌ Error starting application: {e}")
         sys.exit(1)
-
-
 
 def main():
     """Main function"""
@@ -117,5 +116,10 @@ def main():
         print("\n👋 Shutting down gracefully...")
         print("Thanks for using Recipe Scraper!")
 
+# ✅ Entry point for CLI
 if __name__ == "__main__":
     main()
+
+# ✅ Expose app for Gunicorn
+# Gunicorn will look for this when running: gunicorn launch_scraper:app
+app = app
