@@ -40,7 +40,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 app.secret_key = os.getenv("SECRET_KEY", "default_secret")
 
-# db = SQLAlchemy(app)
+db = SQLAlchemy()
 
 
 migrate = Migrate(app, db)
