@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Dashboard</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f6f8;
+      display: flex;
+      height: 100vh;
+    }
+
+    .sidebar {
+      width: 220px;
+      background-color: #1f2d3d;
+      color: white;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar h2 {
+      font-size: 22px;
+      margin-bottom: 30px;
+    }
+
+    .sidebar a {
+      color: white;
+      text-decoration: none;
+      margin: 12px 0;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .sidebar a:hover {
+      color: #00bcd4;
+    }
+    .sidebar a.active {
+      color: #00bcd4;
+      font-weight: bold;
+    }
+
+    .main {
+      flex: 1;
+      padding: 40px;
+      overflow-y: auto;
+    }
+
+    .header h1 {
+      font-size: 28px;
+      color: #2c3e50;
+      margin-bottom: 10px;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-top: 20px;
+    }
+
+    .card h3 {
+      margin-top: 0;
+      color: #34495e;
+    }
+
+    .card p {
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+<div class="sidebar">
+  <h2>Family Panel</h2>
+  <a href="#" data-target="overview">Dashboard Overview</a>
+  <a href="#" data-target="usage">Usage Analytics</a>
+  <a href="#" data-target="recipes">All Recipes</a>
+  <a href="#" data-target="users">Users</a>
+  <a href="#" data-target="settings">Settings</a>
+  <a href="/logout">Logout</a>
+</div>
+
+  <div class="main">
+    <div class="header">
+      <h1>Welcome, {{ username }} 👋</h1>
+      <p>You're logged in as <strong>Family</strong>.</p>
+    </div>
+
+    <div class="card" id="overview">
+      <h3>📊 Dashboard Overview</h3>
+      <p>This panel summarizes key metrics:</p>
+      <ul>
+        <li>Total Recipes: {{ total_recipes }}</li>
+        <!-- <li>Active Users: {{ active_users }}</li> -->
+        <!-- <li>Folders Created: {{ folder_count }}</li> -->
+        <li>Last Sync: {{ last_sync_time }}</li>
+      </ul>
+    </div>
+    <div class="card" id="usage">
+      <h3>📈 Usage Analytics</h3>
+      <p>Track how users interact with the app:</p>
+      <ul>
+        <li>Most Scraped Source: {{ top_source }}</li>
+        <li>Popular Folder Tags: {{ popular_tags | join(', ') }}</li>
+        <li>Average Recipes per User: {{ avg_recipes }}</li>
+      </ul>
+    </div>
+    <div class="card" id="recipes">
+  <h3>🍽️ All Recipes</h3>
+  <div id="recipeList"></div>
+
+   
+</div>
+
+
+<div class="card" id="settings">
+  <h3>⚙️ Application Settings</h3>
+  <form method="POST" action="/update-settings">
+    <label for="defaultFolder">Default Folder for New Recipes:</label><br>
+    <select name="defaultFolder" style="margin-top: 8px; padding: 6px;">
+      {% for folder in folders %}
+        <option value="{{ folder.id }}">{{ folder.name }}</option>
+      {% endfor %}
+    </select><br><br>
+
+    <label for="syncFrequency">Auto-Sync Frequency:</label><br>
+    <select name="syncFrequency" style="margin-top: 8px; padding: 6px;">
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="manual">Manual Only</option>
+    </select><br><br>
+
+    <button type="submit" style="padding: 10px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px;">
+      Save Settings
+    </button>
+  </form>
+</div>
+  </div>
+</body>
+<script>
+
+
+  const links = document.querySelectorAll('.sidebar a[data-target]');
+  const sections = document.querySelectorAll('.main .card');
+
+  let recipes = [];
+  let expandedRecipe = null;
+  let editingFilename = null;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadRecipeList(); // Load recipes on page load
+  });
+
+  async function getRecipeList() {
+  const response = await fetch('');
+  return await response.json();
+}
+
+  
+  async function loadRecipeList() {
+    try {
+      recipes = await getRecipeList();
+      console.log('✅ Recipes loaded:', recipes);
+      renderRecipeList();
+    } catch (error) {
+      console.error('❌ Failed to load recipes:', error);
+    }
+  }
+
+
+  links.forEach(link => {
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      const targetId = this.getAttribute('data-target');
+
+      // Toggle active class
+      links.forEach(l => l.classList.remove('active'));
+      this.classList.add('active');
+
+      // Show selected section
+      sections.forEach(section => {
+        section.style.display = section.id === targetId ? 'block' : 'none';
+      });
+    });
+  });
+
+  // Show default section on load
+  sections.forEach(section => {
+    section.style.display = section.id === 'overview' ? 'block' : 'none';
+  });
+
+  // Set default active link
+  document.querySelector('.sidebar a[data-target="overview"]').classList.add('active');
+</script>
+</html>
