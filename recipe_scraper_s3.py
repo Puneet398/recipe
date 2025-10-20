@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from fileinput import filename
+from multiprocessing import context
 import os
 import sys
 import subprocess
@@ -21,11 +23,12 @@ from PIL import Image, ImageOps
 import pytesseract
 import traceback
 from auth import auth_bp
-from models import User, db
+from models import User, Recipe, db
 # from admin import admin_bp
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user, login_user, logout_user, login_required
 from flask_sqlalchemy import SQLAlchemy
+
 
 
 
@@ -489,9 +492,9 @@ Content:
         if ai_response.strip() == "NO_RECIPE_FOUND":
             return f"""# No Recipe Found
 
-**URL:** {scraped_data['url']}
+            **URL:** {scraped_data['url']}
 
-Could not extract a clear recipe from this URL. The page may not contain a recipe or may be behind a paywall."""
+            Could not extract a clear recipe from this URL. The page may not contain a recipe or may be behind a paywall."""
         
         if scraped_data['url'] not in ai_response:
             lines = ai_response.split('\n')
@@ -502,32 +505,33 @@ Could not extract a clear recipe from this URL. The page may not contain a recip
         
         return ai_response
     
-    def scrape_and_save(self, url):
-        scraped_data = self.scrape_url(url)
-        if not scraped_data:
-            raise Exception("Failed to scrape URL")
-        
-        ai_response = self.parse_with_ai(scraped_data)
-        markdown_content = self.create_markdown(ai_response, scraped_data)
-        
-        domain = urlparse(url).netloc.replace('www.', '')
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"recipe_{domain}_{timestamp}.md"
-        
-        if not self.storage.save_recipe(filename, markdown_content):
-            raise Exception("Failed to save recipe to S3")
-        
-        recipe_name = "Unknown Recipe"
-        if markdown_content.startswith('# '):
-            recipe_name = markdown_content.split('\n')[0][2:].strip()
-        
-        return {
-            'filename': filename,
-            'recipe_name': recipe_name,
-            'url': url,
-            'content': markdown_content,
-            'created': datetime.now().isoformat()
-        }
+    def scrape_and_save(self, url, user_id):
+            scraped_data = self.scrape_url(url)
+            if not scraped_data:
+                raise Exception("Failed to scrape URL")
+            
+            ai_response = self.parse_with_ai(scraped_data)
+            markdown_content = self.create_markdown(ai_response, scraped_data)
+            
+            domain = urlparse(url).netloc.replace('www.', '')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"recipe_{domain}_{timestamp}.md"
+            
+            if not self.storage.save_recipe(filename, markdown_content):
+                raise Exception("Failed to save recipe to S3")
+            
+            recipe_name = "Unknown Recipe"
+            if markdown_content.startswith('# '):
+                recipe_name = markdown_content.split('\n')[0][2:].strip()
+            
+            return {
+                'filename': filename,
+                'recipe_name': recipe_name,
+                'url': url,
+                'content': markdown_content,
+                'created': datetime.now().isoformat()
+            }
+
 
 try:
     storage = S3Storage()
@@ -1118,7 +1122,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <div class="progress-fill" id="ocrProgressFill"></div>
             </div>
         </div>
-
+        
         <!-- Recipe Collection -->
         <div class="collection-header">
             <h2 class="section-title">Recipe Collection</h2>
@@ -1740,31 +1744,62 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 @app.route('/dashboard')
 def dashboard():
-        role = session.get('role')  # Assuming role is stored in session
-
-        if role == 'admin':
-            return render_template('admin_dashboard.html')
-        elif role == 'family':
-            return render_template('family_dashboard.html')
-        elif role == 'user':
-            return render_template('user_dashboard.html')
-        else:
-            return redirect(url_for('login'))  # Or show an error page
-
-@app.route('/update-user-roles', methods=['POST'])
-@login_required
-def update_user_roles():
-        if current_user.role.lower() != 'admin':
-            return redirect('/dashboard')
-
-        users = User.query.all()
-        for user in users:
-            new_role = request.form.get(f'role_{user.id}')
-            if new_role and new_role != user.role:
-                user.role = new_role
-        db.session.commit()
-        return redirect('/dashboard')
+    role = session.get('role')
+    username = session.get('username')  # or use current_user.username
     
+
+    users = User.query.all()
+    recipes = Recipe.query.filter_by(user_id=current_user.id).all()
+
+    # folders = folders.query.all()
+
+    total_recipes = len(recipes)
+    active_users = sum(1 for u in users if u.is_active)
+    # folder_count = len(folders)
+    last_sync_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Add recipe_count to each user
+    for user in users:
+        user.recipe_count = recipes.query.filter_by(user_id=user.id).count()
+
+    context = {
+        'username': username,
+        'total_recipes': total_recipes,
+        'active_users': active_users,
+        # 'folder_count': folder_count,
+        'last_sync_time': last_sync_time,
+        'top_source': 'youtube.com',
+        'popular_tags': ['Chicken', 'Quick Meals'],
+        'avg_recipes': round(total_recipes / len(users), 2) if users else 0,
+        'recipes': recipes,
+        'users': users,
+        # 'folders': folders
+    }
+
+    if role == 'admin':
+        return render_template('admin_dashboard.html', **context)
+    elif role == 'family':
+        return render_template('family_dashboard.html', **context)
+    elif role == 'user':
+        return render_template('user_dashboard.html', **context)
+    else:
+        return redirect(url_for('login'))
+
+# @app.route('/update-user-roles', methods=['POST'])
+# @login_required
+# def update_user_roles():
+#         if current_user.role.lower() != 'admin':
+#             return redirect('/dashboard')
+
+#         users = User.query.all()
+#         for user in users:
+#             new_role = request.form.get(f'role_{user.id}')
+#             if new_role and new_role != user.role:
+#                 user.role = new_role
+#         db.session.commit()
+#         return redirect('/dashboard')
+    
+
 @app.route('/auth/login', methods=['POST'])
 def login():
         username = request.form.get('username')
@@ -1807,16 +1842,92 @@ def logout():
     logout_user()
     return redirect(url_for('auth_page'))
     
+@app.route('/api/update-role', methods=['POST'])
+def update_role():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    new_role = data.get('new_role')
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    user.role = new_role
+    db.session.commit()
+    return jsonify({'message': 'Role updated successfully'})
+
+@app.route('/api/dashboard-metrics')
+def dashboard_metrics():
+    total_recipes = Recipe.query.count()
+    active_users = User.query.count()
+    last_sync_time = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    return jsonify({
+        'total_recipes': total_recipes,
+        'active_users': active_users,
+        'last_sync_time': last_sync_time
+    })
+
+@app.route('/api/usage-analytics')
+def usage_analytics():
+    # Most scraped source
+    top_source = db.session.query(Recipe.source).group_by(Recipe.source).order_by(db.func.count().desc()).first()
+
+    # Average recipes per user
+    user_count = User.query.count()
+    recipe_count = Recipe.query.count()
+    avg_recipes = round(recipe_count / user_count, 2) if user_count else 0
+
+    # Popular tags (placeholder logic)
+    popular_tags = ['quick', 'vegan', 'dessert']  # Replace with actual tag aggregation if available
+
+    # Breakdown for charting
+    scraped_count = Recipe.query.filter(Recipe.source != None).count()
+    manual_count = Recipe.query.filter(Recipe.source == None).count()
+    favorites_count = 10  # Replace with actual logic if you track favorites
+
+    return jsonify({
+        'top_source': top_source[0] if top_source else 'N/A',
+        'avg_recipes': avg_recipes,
+        'popular_tags': popular_tags,
+        'scraped_count': scraped_count,
+        'manual_count': manual_count,
+        'favorites_count': favorites_count,
+        'total_recipes': recipe_count,
+        'total_users': user_count
+    })
+@app.route('/api/users')
+def get_users():
+    users = User.query.all()
+    return jsonify([
+        {
+            'id': u.id,
+            'username': u.username,
+            'recipe_count': len(u.recipes),
+            'role': u.role 
+        } for u in users
+    ])
+
+
 
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+# from flask_login import login_required, current_user
+# from models import Recipe
+
 @app.route('/api/recipes')
-def get_recipes():
+@login_required
+def get_user_recipes():
     try:
-        recipes = storage.list_recipes()
-        return jsonify(recipes)
+        recipes = Recipe.query.filter_by(user_id=current_user.id).all()
+        return jsonify([
+            {
+                'name': r.title,
+                'filename': r.s3_key,
+                'created': r.created_at.isoformat()
+            } for r in recipes
+        ])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1876,50 +1987,6 @@ def delete_recipe(filename):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# @app.route('/api/ocr', methods=['POST'])
-# def process_ocr_text():
-    # try:
-    #     data = request.get_json()
-    #     ocr_text = data.get('text', '').strip()
-        
-    #     if not ocr_text:
-    #         return jsonify({'error': 'OCR text is required'}), 400
-        
-    #     scraped_data = {
-    #         'url': 'Photo Upload',
-    #         'title': 'Recipe from Photo',
-    #         'content': ocr_text,
-    #         'type': 'photo_ocr',
-    #         'scraped_at': datetime.now().isoformat()
-    #     }
-        
-    #     ai_response = scraper.parse_with_ai(scraped_data)
-        
-    #     if ai_response.strip() == "NO_RECIPE_FOUND":
-    #         return jsonify({'error': 'Could not extract a clear recipe from the image text. Please try a clearer photo or check if the image contains a recipe.'}), 400
-        
-    #     markdown_content = scraper.create_markdown(ai_response, scraped_data)
-        
-    #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    #     filename = f"recipe_photo_{timestamp}.md"
-        
-    #     if not storage.save_recipe(filename, markdown_content):
-    #         return jsonify({'error': 'Failed to save recipe to S3'}), 500
-        
-    #     recipe_name = "Photo Recipe"
-    #     if markdown_content.startswith('# '):
-    #         recipe_name = markdown_content.split('\n')[0][2:].strip()
-        
-    #     return jsonify({
-    #         'success': True,
-    #         'filename': filename,
-    #         'recipe_name': recipe_name,
-    #         'created': datetime.now().isoformat()
-    #     })
-        
-    # except Exception as e:
-    #     return jsonify({'error': str(e)}), 500
-
 @app.route('/api/ocr', methods=['POST'])
 def process_ocr_text():
     try:
@@ -1929,12 +1996,13 @@ def process_ocr_text():
         if not ocr_text:
             return jsonify({'error': 'OCR text is required'}), 400
 
-        # Step 1: Preprocess OCR text (optional cleanup)
-        cleaned_text = '\n'.join([line.strip() for line in ocr_text.split('\n') if line.strip()])
-        if len(cleaned_text.split()) < 10:
-            return jsonify({'error': 'OCR text too short or unclear. Please try a better image.'}), 400
+        # 🔍 Log OCR output for debugging
+        print("OCR Extracted Text:", ocr_text)
 
-        # Step 2: Build scraped data object
+        # 🧼 Optional: Clean up OCR text before parsing
+        cleaned_text = re.sub(r'\s+', ' ', ocr_text)
+        cleaned_text = cleaned_text.replace('\n', '. ').strip()
+
         scraped_data = {
             'url': 'Photo Upload',
             'title': 'Recipe from Photo',
@@ -1943,75 +2011,153 @@ def process_ocr_text():
             'scraped_at': datetime.now().isoformat()
         }
 
-        # Step 3: AI parsing
+        # 🧠 AI parsing
         ai_response = scraper.parse_with_ai(scraped_data)
-        if not ai_response or ai_response.strip() == "NO_RECIPE_FOUND":
-            return jsonify({
-                'error': 'Could not extract a clear recipe from the image text. Try a clearer photo or ensure it contains a recipe.'
-            }), 400
 
-        # Step 4: Markdown formatting
+        # 🛑 Fallback: If AI fails, check for basic recipe keywords
+        if ai_response.strip() == "NO_RECIPE_FOUND":
+            if "ingredient" in cleaned_text.lower() or "step" in cleaned_text.lower():
+                ai_response = cleaned_text  # Use raw OCR as fallback
+            else:
+                return jsonify({
+                    'error': 'Could not extract a clear recipe from the image text. Please try a clearer photo or check if the image contains a recipe.'
+                }), 400
+
+        # 📝 Convert to markdown
         markdown_content = scraper.create_markdown(ai_response, scraped_data)
-        if not markdown_content or len(markdown_content.strip()) < 10:
-            return jsonify({'error': 'Failed to format recipe content'}), 500
 
-        # Step 5: Save to S3
+        # 🗂️ Save to S3
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"recipe_photo_{timestamp}.md"
-        saved = storage.save_recipe(filename, markdown_content)
 
-        if not saved:
+        if not storage.save_recipe(filename, markdown_content):
             return jsonify({'error': 'Failed to save recipe to S3'}), 500
 
-        # Step 6: Extract recipe name
-        recipe_name = markdown_content.split('\n')[0][2:].strip() if markdown_content.startswith('# ') else "Photo Recipe"
+        # 🏷️ Extract recipe name from markdown
+        recipe_name = "Photo Recipe"
+        if markdown_content.startswith('# '):
+            recipe_name = markdown_content.split('\n')[0][2:].strip()
 
-        # Step 7: Return success response
         return jsonify({
             'success': True,
             'filename': filename,
             'recipe_name': recipe_name,
-            'created': datetime.now().isoformat(),
-            'preview': markdown_content[:300] + '...'  # Optional preview
+            'created': datetime.now().isoformat()
         })
 
     except Exception as e:
-        traceback.print_exc()
-        return jsonify({'error': f'Internal error: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
+
+
+# from flask_login import login_required, current_user
+
+# @app.route('/api/ocr', methods=['POST'])
+# @login_required
+# def process_ocr_text():
+#     try:
+#         data = request.get_json()
+#         ocr_text = data.get('text', '').strip()
+
+#         if not ocr_text:
+#             return jsonify({'error': 'OCR text is required'}), 400
+
+#         # Step 1: Preprocess OCR text
+#         cleaned_text = '\n'.join([line.strip() for line in ocr_text.split('\n') if line.strip()])
+#         if not ai_response or ai_response.strip() == "NO_RECIPE_FOUND":
+#             markdown_content = f"# OCR Recipe\n\n{cleaned_text}"
+
+#         # Step 2: Build scraped data object
+#         scraped_data = {
+#             'url': 'Photo Upload',
+#             'title': 'Recipe from Photo',
+#             'content': cleaned_text,
+#             'type': 'photo_ocr',
+#             'scraped_at': datetime.now().isoformat()
+#         }
+
+#         # Step 3: AI parsing
+#         print("OCR TEXT RECEIVED:\n", cleaned_text)
+#         print("Scraped Data:\n", scraped_data)
+#         ai_response = scraper.parse_with_ai(scraped_data)
+#         print("AI RESPONSE:\n", ai_response)
+#         if not ai_response or ai_response.strip() == "NO_RECIPE_FOUND":
+#             return jsonify({
+#                 'error': 'Could not extract a clear recipe from the image text. Try a clearer photo or ensure it contains a recipe.'
+#             }), 400
+
+#         # Step 4: Markdown formatting
+#         markdown_content = scraper.create_markdown(ai_response, scraped_data)
+#         if not markdown_content or len(markdown_content.strip()) < 10:
+#             return jsonify({'error': 'Failed to format recipe content'}), 500
+
+#         # Step 5: Save to S3
+#         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+#         filename = f"recipe_photo_{timestamp}.md"
+#         saved = storage.save_recipe(filename, markdown_content)
+
+#         if not saved:
+#             return jsonify({'error': 'Failed to save recipe to S3'}), 500
+
+#         # Step 6: Extract recipe name
+#         recipe_name = markdown_content.split('\n')[0][2:].strip() if markdown_content.startswith('# ') else "Photo Recipe"
+
+#         # Step 7: Save metadata to DB
+#         new_recipe = Recipe(
+#             title=recipe_name,
+#             s3_key=filename,
+#             source='Photo Upload',
+#             user_id=current_user.id
+#         )
+#         db.session.add(new_recipe)
+#         db.session.commit()
+
+#         # Step 8: Return success response
+#         return jsonify({
+#             'success': True,
+#             'filename': filename,
+#             'recipe_name': recipe_name,
+#             'created': datetime.now().isoformat(),
+#             'preview': markdown_content[:300] + '...'
+#         })
+
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({'error': f'Internal error: {str(e)}'}), 500
+    
+
+# from flask_login import login_required, current_user
 
 @app.route('/api/scrape', methods=['POST'])
+@login_required
 def scrape_recipe():
-    """Scrape a new recipe from URL"""
     try:
         data = request.get_json()
         url = data.get('url', '').strip()
 
-        ydl_opts = {
-            'cookies': 'cookies.txt',
-            'quiet': True,
-            'outtmpl': '%(title)s.%(ext)s'
-        }
-
-        
         if not url:
             return jsonify({'error': 'URL is required'}), 400
-        
+
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
-        
-        # Use the scraper to process the URL
-        result = scraper.scrape_and_save(url)
-        
+
+        result = scraper.scrape_and_save(url, current_user.id)
+
+        if not result or not isinstance(result, dict):
+            return jsonify({'error': 'Failed to scrape recipe. No data returned.'}), 500
+
         return jsonify({
-            'success': True,
-            'filename': result['filename'],
-            'recipe_name': result['recipe_name'],
-            'url': result['url'],
-            'created': result['created']
+            "filename": result.get("filename"),
+            "recipe_name": result.get("recipe_name"),
+            "url": result.get("url"),
+            "content": result.get("content"),
+            "created": result.get("created", datetime.now().isoformat())
         })
-        
+
+
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        traceback.print_exc()
+        return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=5000)
