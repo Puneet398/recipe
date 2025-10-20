@@ -4,219 +4,407 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin Dashboard</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f4f6f8;
-      display: flex;
-      height: 100vh;
-    }
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  :root {
+    --primary-bg: #fff8f0;
+    --accent: #ff7043;
+    --accent-dark: #e64a19;
+    --text-dark: #2c3e50;
+    --text-light: #666;
+    --card-bg: #ffffff;
+    --sidebar-bg: #3e2723;
+    --sidebar-hover: #ffab91;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+
+  canvas {
+    max-width: 100%;
+    height: 300px;
+  }
+
+  body {
+    background-color: #1e1e1e;
+    color: #f5f5f5;
+    font-family: 'Poppins', sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  .sidebar {
+    width: 220px;
+    background-color: #2c2c2c;
+    color: #fff;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    height: 100vh;
+    top: 0;
+    left: 0;
+  }
+
+  .sidebar h2 {
+    font-size: 22px;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+
+  .sidebar a {
+    color: #f5f5f5;
+    text-decoration: none;
+    margin: 12px 0;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+  }
+
+  .sidebar a:hover {
+    background-color: #ff7043;
+  }
+
+  .sidebar a.active {
+    background-color: var(--accent);
+    font-weight: bold;
+  }
+
+  .main {
+    margin-left: 220px;
+    padding: 40px 20px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .header h1 {
+    font-size: 28px;
+    color: var(--text-dark);
+    margin-bottom: 6px;
+  }
+
+  .header p {
+    color: var(--text-light);
+    margin-bottom: 20px;
+  }
+
+  .card {
+    background: linear-gradient(145deg, #2a2a2a, #1e1e1e);
+    /* backdrop-filter: blur(10px); */
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    margin-bottom: 30px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    animation: fadeIn 0.6s ease-in-out;
+  }
+
+  @keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6);
+  }
+
+  .card table{
+    margin-top: 0;
+  }
+  .card table th,
+  .card table td {
+    font-size: 16px;
+    color: #ffffff;
+    border-bottom: 1px solid #333;
+  }
+.card table thead {
+  background-color: #2c2c2c;
+}
+
+.card table tbody tr:hover {
+  background-color: #333;
+}
+
+
+  .card h3 {
+    margin-top: 0;
+    color: #ffffff;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .card p, .card ul, .card li {
+    color: #f0f0f0;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .card ul{
+    padding-left: 20px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+
+  th, td {
+    padding: 12px;
+    text-align: center;
+  }
+
+  /* thead {
+    background-color: #ffe0b2;
+  } */
+
+  /* tr:nth-child(even) {
+    background-color: #fff3e0;
+  } */
+
+  select {
+    padding: 6px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+  }
+
+  @media (max-width: 768px) {
     .sidebar {
-      width: 220px;
-      background-color: #1f2d3d;
-      color: white;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .sidebar h2 {
-      font-size: 22px;
-      margin-bottom: 30px;
-    }
-
-    .sidebar a {
-      color: white;
-      text-decoration: none;
-      margin: 12px 0;
-      font-weight: 500;
-      transition: color 0.2s;
-    }
-
-    .sidebar a:hover {
-      color: #00bcd4;
-    }
-    .sidebar a.active {
-      color: #00bcd4;
-      font-weight: bold;
+      position: relative;
+      width: 100%;
+      height: auto;
+      flex-direction: row;
+      justify-content: space-around;
     }
 
     .main {
-      flex: 1;
-      padding: 40px;
-      overflow-y: auto;
+      margin-left: 0;
+      padding: 20px;
     }
 
-    .header h1 {
-      font-size: 28px;
-      color: #2c3e50;
-      margin-bottom: 10px;
+    .sidebar a {
+      margin: 0;
+      font-size: 14px;
     }
 
     .card {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-top: 20px;
+      padding: 16px;
     }
 
-    .card h3 {
-      margin-top: 0;
-      color: #34495e;
+    .header h1 {
+      font-size: 22px;
     }
 
-    .card p {
-      color: #666;
+    table, th, td {
+      font-size: 13px;
     }
-  </style>
+  }
+</style>
 </head>
 <body>
-<div class="sidebar">
-  <h2>Admin Panel</h2>
-  <a href="#" data-target="overview">Dashboard Overview</a>
-  <a href="#" data-target="usage">Usage Analytics</a>
-  <a href="#" data-target="recipes">All Recipes</a>
-  <a href="#" data-target="users">Users</a>
-  <a href="#" data-target="settings">Settings</a>
-  <a href="/logout">Logout</a>
-</div>
+  <div class="sidebar">
+    <h2>Admin Panel</h2>
+    <a href="#" data-target="overview"><i class="fas fa-chart-pie"></i> Dashboard</a>
+    <a href="#" data-target="usage"><i class="fas fa-chart-line"></i> Usage Analytics</a>
+    <a href="#" data-target="recipes"><i class="fas fa-utensils"></i> All Recipes</a>
+    <a href="#" data-target="users"><i class="fas fa-users"></i> Users</a>
+    <a href="/" id="home"><i class="fas fa-home"></i> Home</a>
+    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+
+  </div>
 
   <div class="main">
     <div class="header">
-      <h1>Welcome, {{ username }} 👋</h1>
+      <h1>Welcome, Admin 👋</h1>
       <p>You're logged in as <strong>Admin</strong>.</p>
     </div>
 
     <div class="card" id="overview">
       <h3>📊 Dashboard Overview</h3>
-      <p>This panel summarizes key metrics:</p>
-      <ul>
-        <li>Total Recipes: {{ total_recipes }}</li>
-        <li>Active Users: {{ active_users }}</li>
-        <!-- <li>Folders Created: {{ folder_count }}</li> -->
-        <li>Last Sync: {{ last_sync_time }}</li>
-      </ul>
+      <div id="overviewContent">Loading...</div>
     </div>
+
     <div class="card" id="usage">
       <h3>📈 Usage Analytics</h3>
-      <p>Track how users interact with the app:</p>
-      <ul>
-        <li>Most Scraped Source: {{ top_source }}</li>
-        <li>Popular Folder Tags: {{ popular_tags | join(', ') }}</li>
-        <li>Average Recipes per User: {{ avg_recipes }}</li>
-      </ul>
+      <div id="usageContent">Loading...</div>
     </div>
+    <!-- <canvas id="usageChart" style="max-width: 100%; height: 300px;"></canvas> -->
+
     <div class="card" id="recipes">
-  <h3>🍽️ All Recipes</h3>
-  <div id="recipeList"></div>
+      <h3>🍽️ All Recipes</h3>
+      <div id="recipeList">Loading...</div>
+    </div>
 
-   
-</div>
+    <div class="card" id="users">
+      <h3>👥 User Activity</h3>
+      <table style="width: 100%; border-collapse: collapse; margin-top: 0;">
+        <thead>
+          <tr>
+            <th style="padding: 12px;">Username</th>
+            <th style="padding: 12px;">Recipes Added</th>
+            <th style="padding: 12px;">Role</th>
+            <!-- <th style="padding: 12px;">Actions</th> -->
+          </tr>
+        </thead>
+        <tbody id="userTableBody">
+          <tr><td colspan="4" style="padding: 12px;">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-<div class="card" id="users">
-  <h3>👥 User Activity</h3>
-  <table style="width: 100%; border-collapse: collapse;">
-    <thead>
-      <tr style="background-color: #ecf0f1;">
-        <th style="padding: 12px;">Username</th>
-        <th style="padding: 12px;">Recipes Added</th>
-        <th style="padding: 12px;">Last Login</th>
-        <th style="padding: 12px;">Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for user in users %}
-      <tr style="border-bottom: 1px solid #ddd;">
-        <td style="padding: 12px;">{{ user.username }}</td>
-        <td style="padding: 12px;">{{ user.recipe_count }}</td>
-        <td style="padding: 12px;">{{ user.last_login }}</td>
-        <td style="padding: 12px;">{{ 'Active' if user.is_active else 'Inactive' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
 
-<div class="card" id="settings">
-  <h3>⚙️ Application Settings</h3>
-  <form method="POST" action="/update-settings">
-    <label for="defaultFolder">Default Folder for New Recipes:</label><br>
-    <select name="defaultFolder" style="margin-top: 8px; padding: 6px;">
-      {% for folder in folders %}
-        <option value="{{ folder.id }}">{{ folder.name }}</option>
-      {% endfor %}
-    </select><br><br>
-
-    <label for="syncFrequency">Auto-Sync Frequency:</label><br>
-    <select name="syncFrequency" style="margin-top: 8px; padding: 6px;">
-      <option value="daily">Daily</option>
-      <option value="weekly">Weekly</option>
-      <option value="manual">Manual Only</option>
-    </select><br><br>
-
-    <button type="submit" style="padding: 10px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px;">
-      Save Settings
-    </button>
-  </form>
-</div>
   </div>
-</body>
-<script>
 
+  <script>
+    const links = document.querySelectorAll('.sidebar a[data-target]');
+    const sections = document.querySelectorAll('.main .card');
 
-  const links = document.querySelectorAll('.sidebar a[data-target]');
-  const sections = document.querySelectorAll('.main .card');
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDashboardMetrics();
+      loadUsageAnalytics();
+      loadRecipeList();
+      loadUserTable();
+    });
 
-  let recipes = [];
-  let expandedRecipe = null;
-  let editingFilename = null;
+    links.forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetId = this.getAttribute('data-target');
+        links.forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        sections.forEach(section => {
+          section.style.display = section.id === targetId ? 'block' : 'none';
+        });
+      });
+    });
 
-  document.addEventListener('DOMContentLoaded', () => {
-    loadRecipeList(); // Load recipes on page load
-  });
+    sections.forEach(section => {
+      section.style.display = section.id === 'overview' ? 'block' : 'none';
+    });
 
-  async function getRecipeList() {
-  const response = await fetch('');
-  return await response.json();
-}
+    document.querySelector('.sidebar a[data-target="overview"]').classList.add('active');
 
-  
-  async function loadRecipeList() {
+    async function loadDashboardMetrics() {
+      try {
+        const res = await fetch('/api/dashboard-metrics');
+        const data = await res.json();
+        document.getElementById('overviewContent').innerHTML = `
+          <ul>
+            <li>Total Recipes: ${data.total_recipes}</li>
+            <li>Active Users: ${data.active_users}</li>
+            <li>Last Sync: ${data.last_sync_time}</li>
+          </ul>
+        `;
+      } catch (err) {
+        document.getElementById('overviewContent').innerText = 'Failed to load metrics.';
+      }
+    }
+
+    async function loadUsageAnalytics() {
+      try {
+        const res = await fetch('/api/usage-analytics');
+        const data = await res.json();
+        document.getElementById('usageContent').innerHTML = `
+          <ul>
+            <li>Most Scraped Source: ${data.top_source}</li>
+            <li>Popular Folder Tags: ${data.popular_tags.join(', ')}</li>
+            <li>Average Recipes per User: ${data.avg_recipes}</li>
+          </ul>
+        `;
+        // renderUsageChart(data);
+      } catch (err) {
+        document.getElementById('usageContent').innerText = 'Failed to load analytics.';
+      }
+    }
+
+    function renderUsageChart(data) {
+      const ctx = document.getElementById('usageChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Scraped Recipes', 'Manual Recipes', 'Favorites'],
+          datasets: [{
+            data: [data.scraped_count || 40, data.manual_count || 20, data.favorites_count || 10],
+            backgroundColor: ['#ff7043', '#ffa726', '#66bb6a'],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: { enabled: true }
+          }
+        }
+      });
+    }
+
+    async function loadRecipeList() {
+      try {
+        const res = await fetch('/api/recipes');
+        const recipes = await res.json();
+        const container = document.getElementById('recipeList');
+        if (recipes.length === 0) {
+          container.innerHTML = `<p>You haven't added any recipes yet. Start by scraping one!</p>`;
+        } else {
+          container.innerHTML = `<ul>${recipes.map(r => `<li>${r.title} (${r.source})</li>`).join('')}</ul>`;
+        }
+      } catch (err) {
+        document.getElementById('recipeList').innerText = 'Failed to load recipes.';
+      }
+    }
+
+   async function loadUserTable() {
     try {
-      recipes = await getRecipeList();
-      console.log('✅ Recipes loaded:', recipes);
-      renderRecipeList();
-    } catch (error) {
-      console.error('❌ Failed to load recipes:', error);
+      const res = await fetch('/api/users');
+      const users = await res.json();
+      const tbody = document.getElementById('userTableBody');
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td style="padding: 14px;">${u.username}</td>
+          <td style="padding: 14px;">${u.recipe_count}</td>
+          <td style="padding: 14px;">${u.role}</td>
+        </tr>
+      `).join('');
+    } catch (err) {
+      document.getElementById('userTableBody').innerHTML = `<tr><td colspan="3" style="padding: 14px;">Failed to load users.</td></tr>`;
     }
   }
 
+    async function updateUserRole(userId, newRole) {
+      try {
+        const res = await fetch('/api/update-role', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, new_role: newRole })
+        });
 
-  links.forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      const targetId = this.getAttribute('data-target');
-
-      // Toggle active class
-      links.forEach(l => l.classList.remove('active'));
-      this.classList.add('active');
-
-      // Show selected section
-      sections.forEach(section => {
-        section.style.display = section.id === targetId ? 'block' : 'none';
-      });
-    });
-  });
-
-  // Show default section on load
-  sections.forEach(section => {
-    section.style.display = section.id === 'overview' ? 'block' : 'none';
-  });
-
-  // Set default active link
-  document.querySelector('.sidebar a[data-target="overview"]').classList.add('active');
-</script>
+        const result = await res.json();
+        const statusEl = document.getElementById(`status-${userId}`);
+        if (res.ok) {
+          statusEl.textContent = '✅ Updated';
+          statusEl.style.color = 'green';
+        } else {
+          statusEl.textContent = '❌ Failed';
+          statusEl.style.color = 'red';
+        }
+      } catch (err) {
+        const statusEl = document.getElementById(`status-${userId}`);
+        statusEl.textContent = '❌ Error';
+        statusEl.style.color = 'red';
+      }
+    }
+  </script>
+</body>
 </html>
