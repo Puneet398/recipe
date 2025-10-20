@@ -4,196 +4,238 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Family Dashboard</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
   <style>
-    body {
+    :root {
+      --accent: #ff7043;
+      --text-light: #ccc;
+      --text-dark: #f5f5f5;
+      --sidebar-bg: #2c2c2c;
+    }
+
+    * {
+      box-sizing: border-box;
       margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f4f6f8;
+      padding: 0;
+    }
+
+    body {
+      background-color: #1e1e1e;
+      color: var(--text-dark);
+      font-family: 'Poppins', sans-serif;
       display: flex;
-      height: 100vh;
+      flex-direction: column;
+      min-height: 100vh;
     }
 
     .sidebar {
       width: 220px;
-      background-color: #1f2d3d;
-      color: white;
+      background-color: var(--sidebar-bg);
+      color: var(--text-dark);
       padding: 20px;
       display: flex;
       flex-direction: column;
+      position: fixed;
+      height: 100vh;
+      top: 0;
+      left: 0;
     }
 
     .sidebar h2 {
       font-size: 22px;
       margin-bottom: 30px;
+      text-align: center;
     }
 
     .sidebar a {
-      color: white;
+      color: var(--text-dark);
       text-decoration: none;
       margin: 12px 0;
       font-weight: 500;
-      transition: color 0.2s;
+      padding: 10px 14px;
+      border-radius: 6px;
+      transition: background-color 0.2s ease;
     }
 
     .sidebar a:hover {
-      color: #00bcd4;
+      background-color: var(--accent);
     }
+
     .sidebar a.active {
-      color: #00bcd4;
+      background-color: var(--accent);
       font-weight: bold;
     }
 
     .main {
+      margin-left: 220px;
+      padding: 40px 20px;
       flex: 1;
-      padding: 40px;
       overflow-y: auto;
     }
 
     .header h1 {
       font-size: 28px;
-      color: #2c3e50;
-      margin-bottom: 10px;
+      color: var(--text-dark);
+      margin-bottom: 6px;
+    }
+
+    .header p {
+      color: var(--text-light);
+      margin-bottom: 20px;
     }
 
     .card {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-top: 20px;
+      background: linear-gradient(145deg, #2a2a2a, #1e1e1e);
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      margin-bottom: 30px;
+      transition: transform 0.2s ease;
+      animation: fadeIn 0.6s ease-in-out;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
     }
 
     .card h3 {
       margin-top: 0;
-      color: #34495e;
+      color: var(--text-dark);
+      font-size: 20px;
+      margin-bottom: 12px;
     }
 
-    .card p {
-      color: #666;
+    .card p, .card ul, .card li {
+      color: var(--text-light);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .card ul {
+      padding-left: 20px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        justify-content: space-around;
+      }
+
+      .main {
+        margin-left: 0;
+        padding: 20px;
+      }
+
+      .sidebar a {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      .header h1 {
+        font-size: 22px;
+      }
     }
   </style>
 </head>
 <body>
-<div class="sidebar">
-  <h2>Family Panel</h2>
-  <a href="#" data-target="overview">Dashboard Overview</a>
-  <a href="#" data-target="usage">Usage Analytics</a>
-  <a href="#" data-target="recipes">All Recipes</a>
-  <a href="#" data-target="users">Users</a>
-  <a href="#" data-target="settings">Settings</a>
-  <a href="/logout">Logout</a>
-</div>
+  <div class="sidebar">
+    <h2>Family Panel</h2>
+    <a href="#" data-target="overview"><i class="fas fa-chart-pie"></i> Dashboard</a>
+    <a href="#" data-target="recipes"><i class="fas fa-utensils"></i> Shared Recipes</a>
+    <a href="/" id="home"><i class="fas fa-home"></i> Home</a>
+    <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </div>
 
   <div class="main">
     <div class="header">
-      <h1>Welcome, {{ username }} 👋</h1>
+      <h1>Welcome, Family Member 👋</h1>
       <p>You're logged in as <strong>Family</strong>.</p>
     </div>
 
     <div class="card" id="overview">
-      <h3>📊 Dashboard Overview</h3>
-      <p>This panel summarizes key metrics:</p>
-      <ul>
-        <li>Total Recipes: {{ total_recipes }}</li>
-        <!-- <li>Active Users: {{ active_users }}</li> -->
-        <!-- <li>Folders Created: {{ folder_count }}</li> -->
-        <li>Last Sync: {{ last_sync_time }}</li>
-      </ul>
+      <h3>📊 Family Overview</h3>
+      <div id="overviewContent">Loading...</div>
     </div>
-    <div class="card" id="usage">
-      <h3>📈 Usage Analytics</h3>
-      <p>Track how users interact with the app:</p>
-      <ul>
-        <li>Most Scraped Source: {{ top_source }}</li>
-        <li>Popular Folder Tags: {{ popular_tags | join(', ') }}</li>
-        <li>Average Recipes per User: {{ avg_recipes }}</li>
-      </ul>
-    </div>
+
     <div class="card" id="recipes">
-  <h3>🍽️ All Recipes</h3>
-  <div id="recipeList"></div>
-
-   
-</div>
-
-
-<div class="card" id="settings">
-  <h3>⚙️ Application Settings</h3>
-  <form method="POST" action="/update-settings">
-    <label for="defaultFolder">Default Folder for New Recipes:</label><br>
-    <select name="defaultFolder" style="margin-top: 8px; padding: 6px;">
-      {% for folder in folders %}
-        <option value="{{ folder.id }}">{{ folder.name }}</option>
-      {% endfor %}
-    </select><br><br>
-
-    <label for="syncFrequency">Auto-Sync Frequency:</label><br>
-    <select name="syncFrequency" style="margin-top: 8px; padding: 6px;">
-      <option value="daily">Daily</option>
-      <option value="weekly">Weekly</option>
-      <option value="manual">Manual Only</option>
-    </select><br><br>
-
-    <button type="submit" style="padding: 10px 20px; background-color: #3498db; color: white; border: none; border-radius: 4px;">
-      Save Settings
-    </button>
-  </form>
-</div>
+      <h3>🍽️ Shared Recipes</h3>
+      <div id="recipeList">Loading...</div>
+    </div>
   </div>
-</body>
-<script>
 
 
-  const links = document.querySelectorAll('.sidebar a[data-target]');
-  const sections = document.querySelectorAll('.main .card');
+  <script>
+    const links = document.querySelectorAll('.sidebar a[data-target]');
+    const sections = document.querySelectorAll('.main .card');
 
-  let recipes = [];
-  let expandedRecipe = null;
-  let editingFilename = null;
+    document.addEventListener('DOMContentLoaded', () => {
+      loadDashboardMetrics();
+      loadRecipeList();
+    });
 
-  document.addEventListener('DOMContentLoaded', () => {
-    loadRecipeList(); // Load recipes on page load
-  });
-
-  async function getRecipeList() {
-  const response = await fetch('');
-  return await response.json();
-}
-
-  
-  async function loadRecipeList() {
-    try {
-      recipes = await getRecipeList();
-      console.log('✅ Recipes loaded:', recipes);
-      renderRecipeList();
-    } catch (error) {
-      console.error('❌ Failed to load recipes:', error);
-    }
-  }
-
-
-  links.forEach(link => {
-    link.addEventListener('click', function(e) {
-      e.preventDefault();
-      const targetId = this.getAttribute('data-target');
-
-      // Toggle active class
-      links.forEach(l => l.classList.remove('active'));
-      this.classList.add('active');
-
-      // Show selected section
-      sections.forEach(section => {
-        section.style.display = section.id === targetId ? 'block' : 'none';
+    links.forEach(link => {
+      link.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetId = this.getAttribute('data-target');
+        links.forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+        sections.forEach(section => {
+          section.style.display = section.id === targetId ? 'block' : 'none';
+        });
       });
     });
-  });
 
-  // Show default section on load
-  sections.forEach(section => {
-    section.style.display = section.id === 'overview' ? 'block' : 'none';
-  });
+    sections.forEach(section => {
+      section.style.display = section.id === 'overview' ? 'block' : 'none';
+    });
 
-  // Set default active link
-  document.querySelector('.sidebar a[data-target="overview"]').classList.add('active');
-</script>
+    document.querySelector('.sidebar a[data-target="overview"]').classList.add('active');
+
+    async function loadDashboardMetrics() {
+      try {
+        const res = await fetch('/api/dashboard-metrics');
+        const data = await res.json();
+        document.getElementById('overviewContent').innerHTML = `
+          <ul>
+            <li>Total Recipes: ${data.total_recipes}</li>
+            <li>Active Users: ${data.active_users}</li>
+            <li>Last Sync: ${data.last_sync_time}</li>
+          </ul>
+        `;
+      } catch (err) {
+        document.getElementById('overviewContent').innerText = 'Failed to load metrics.';
+      }
+    }
+
+    async function loadRecipeList() {
+      try {
+        const res = await fetch('/api/recipes');
+        const recipes = await res.json();
+        const container = document.getElementById('recipeList');
+        if (recipes.length === 0) {
+          container.innerHTML = `<p>No shared recipes yet. Start by adding one!</p>`;
+        } else {
+          container.innerHTML = `<ul>${recipes.map(r => `<li>${r.title} (${r.source})</li>`).join('')}</ul>`;
+        }
+      } catch (err) {
+        document.getElementById('recipeList').innerText = 'Failed to load recipes.';
+      }
+    }
+  </script>
+</body>
 </html>
