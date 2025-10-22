@@ -1138,9 +1138,10 @@ HTML_TEMPLATE = """
             }
         }
             .container {
-      padding: 2rem;
-      font-family: Arial, sans-serif;
-    }
+              padding-top: 5rem !important;
+              padding: 2rem;
+              font-family: Arial, sans-serif;
+            }
     .header {
       margin-bottom: 2rem;
     }
