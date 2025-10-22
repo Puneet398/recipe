@@ -1,70 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Login</title>
+  <meta charset="UTF-8" />
+  <title>Login - Churro's Recipes</title>
   <style>
+    :root {
+      --bg-dark: #1e1e2f;
+      --card-dark: #2a2a3d;
+      --accent: #ff6b6b;
+      --text-light: #f0f0f0;
+      --text-muted: #a0a0b0;
+    }
+
     body {
       margin: 0;
       padding: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(to right, #f8f9fa, #e0eafc);
+      background-color: var(--bg-dark);
       display: flex;
       justify-content: center;
       align-items: center;
       height: 100vh;
+      color: var(--text-light);
     }
 
     .login-container {
-      background-color: white;
+      background-color: var(--card-dark);
       padding: 40px;
-      border-radius: 12px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
       width: 100%;
       max-width: 400px;
       text-align: center;
+      transition: transform 0.3s ease;
+    }
+
+    .login-container:hover {
+      transform: translateY(-2px);
     }
 
     h2 {
       margin-bottom: 30px;
-      color: #333;
+      font-size: 28px;
+      color: var(--accent);
     }
 
-   input, select, button {
-    width: 100%;
-    padding: 12px 15px;
-    margin: 10px 0;
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    font-size: 16px;
-    box-sizing: border-box;
-  }
+    input, button {
+      width: 100%;
+      padding: 12px 15px;
+      margin: 10px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
 
-  select {
-    appearance: none;
-    background-color: white;
-  }
+    input {
+      background-color: #3a3a4d;
+      color: var(--text-light);
+      border: 1px solid #444;
+    }
 
-  button {
-    background-color: #28a745;
-    color: white;
-    border: none;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
+    input::placeholder {
+      color: var(--text-muted);
+    }
 
-  button:hover {
-    background-color: #218838;
-  }
+    button {
+      background-color: var(--accent);
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #ff4c4c;
+    }
 
     p {
       margin-top: 20px;
       font-size: 14px;
-      color: #555;
+      color: var(--text-muted);
     }
 
     a {
-      color: #007bff;
+      color: var(--accent);
       text-decoration: none;
       font-weight: bold;
     }
@@ -76,11 +96,11 @@
 </head>
 <body>
   <div class="login-container">
-    <h2>Login</h2>
+    <h2>🔐 Login to Churro's Recipes</h2>
 
     <form method="POST">
-      <input name="username" placeholder="Username" required>
-      <input name="password" type="password" placeholder="Password" required>
+      <input name="username" placeholder="Username" required />
+      <input name="password" type="password" placeholder="Password" required />
       <button type="submit">Login</button>
     </form>
 
