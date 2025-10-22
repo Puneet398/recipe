@@ -295,13 +295,20 @@ class RecipeScraper:
     
     def extract_youtube_transcript(self, url):
         try:
+            cookie_file_path = 'youtube_cookies.txt'
             ydl_opts = {
                 'writesubtitles': True,
                 'writeautomaticsub': True,
                 'subtitleslangs': ['en', 'en-US', 'en-GB'],
                 'skip_download': True,
                 'no_warnings': True,
+                # Add this line to specify the cookie file:
+                'cookiefile': cookie_file_path
             }
+            if not os.path.exists(cookie_file_path):
+                print(f"Warning: Cookie file not found at {cookie_file_path}. Authentication may fail.")
+             # Decide if you want to remove the cookiefile option or proceed without it
+             # del ydl_opts['cookiefile']
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
