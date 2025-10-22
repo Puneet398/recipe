@@ -1,15 +1,15 @@
-Flask==3.1.2
-flask-cors==6.0.1
+Flask~=3.0.3
+flask-cors~=4.0.1
 Flask-Login==0.6.3
 Flask-Migrate==4.1.0
 Flask-SQLAlchemy==3.1.1
-requests==2.31.0
-beautifulsoup4==4.13.4
-openai==2.3.0
-yt-dlp==2025.9.26
-python-dotenv==1.1.1
-pillow==10.4.0
+requests~=2.31.0
+beautifulsoup4~=4.12.3
+openai~=1.0  # Or specify a higher version like ~=1.34.0
+yt-dlp # Let pip install the latest stable version
+python-dotenv~=1.0.1 # Updated slightly
+pillow~=10.4.0
 pytesseract==0.3.13
-boto3==1.26.156
-gunicorn==21.2.0
-psycopg2-binary==2.9.11
+boto3~=1.34.0 # Updated significantly
+gunicorn~=21.2.0 # Can update to ~=22.0.0 if desired
+psycopg2-binary~=2.9.9 # Use latest patch
