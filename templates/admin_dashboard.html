@@ -350,61 +350,103 @@
       });
     }
 
-    async function loadRecipeList() {
-      try {
-        const res = await fetch('/api/recipes');
-        const recipes = await res.json();
-        const container = document.getElementById('recipeList');
-        if (recipes.length === 0) {
-          container.innerHTML = `<p>You haven't added any recipes yet. Start by scraping one!</p>`;
-        } else {
-          container.innerHTML = `<ul>${recipes.map(r => `<li>${r.title} (${r.source})</li>`).join('')}</ul>`;
-        }
-      } catch (err) {
-        document.getElementById('recipeList').innerText = 'Failed to load recipes.';
-      }
-    }
+async function loadRecipeList() {
+  try {
 
-   async function loadUserTable() {
+    const res = await fetch('/api/recipes'); 
+    if (!res.ok) {
+// Handle potential errors like session expiration
+      if (res.status === 401) {
+        document.getElementById('recipeList').innerHTML = `<p>Session expired. Please <a href="{{ url_for('auth.login') }}">log in</a> again.</p>`;
+      } 
+      else {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return; 
+    }
+    const recipes = await res.json();
+    const container = document.getElementById('recipeList');
+
+        if (!recipes || recipes.length === 0) {
+          container.innerHTML = `<p>No recipes found.</p>`;
+        } else {
+          // Use the correct keys: name, created, filename, user_id (optional)
+          let recipeHtml = '<ul>';
+          recipes.forEach(r => {
+            let date = new Date(r.created).toLocaleDateString();
+            let userInfo = r.user_id ? ` (User: ${r.user_id})` : ''; // Show user ID for admin
+            recipeHtml += `<li>
+              <strong>${r.name || 'Unknown Recipe'}</strong> - Added on ${date}${userInfo}<br>
+              <small style="color: #aaa;">${r.filename}</small>
+            </li>`;
+          });
+          recipeHtml += '</ul>';
+          container.innerHTML = recipeHtml;
+        }
+      } catch (err) {
+        console.error('Failed to load recipes:', err); // Log the actual error
+        document.getElementById('recipeList').innerText = 'Failed to load recipes. Check console for details.';
+      }
+    }
+
+async function loadUserTable() {
     try {
-      const res = await fetch('/api/users');
-      const users = await res.json();
-      const tbody = document.getElementById('userTableBody');
-      tbody.innerHTML = users.map(u => `
-        <tr>
-          <td style="padding: 14px;">${u.username}</td>
-          <td style="padding: 14px;">${u.recipe_count}</td>
-          <td style="padding: 14px;">${u.role}</td>
-        </tr>
-      `).join('');
-    } catch (err) {
-      document.getElementById('userTableBody').innerHTML = `<tr><td colspan="3" style="padding: 14px;">Failed to load users.</td></tr>`;
-    }
-  }
-
-    async function updateUserRole(userId, newRole) {
-      try {
-        const res = await fetch('/api/update-role', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, new_role: newRole })
-        });
-
-        const result = await res.json();
-        const statusEl = document.getElementById(`status-${userId}`);
-        if (res.ok) {
-          statusEl.textContent = '✅ Updated';
-          statusEl.style.color = 'green';
-        } else {
-          statusEl.textContent = '❌ Failed';
-          statusEl.style.color = 'red';
+        const res = await fetch('/api/users'); // Fetches user data
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
         }
-      } catch (err) {
-        const statusEl = document.getElementById(`status-${userId}`);
-        statusEl.textContent = '❌ Error';
-        statusEl.style.color = 'red';
-      }
+        const users = await res.json();
+        const tbody = document.getElementById('userTableBody');
+        
+        tbody.innerHTML = users.map(u => `
+            <tr>
+                <td style="padding: 14px;">${u.username}</td>
+                <td style="padding: 14px;">${u.recipe_count}</td>
+                <td style="padding: 14px;">
+                    <select id="role-${u.id}" onchange="updateUserRole(${u.id}, this.value)">
+                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
+                        <option value="family" ${u.role === 'family' ? 'selected' : ''}>Family</option>
+                        <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
+                    </select>
+                    <span id="status-${u.id}" style="margin-left: 10px; font-size: 12px;"></span> </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        console.error('Failed to load users:', err); // Log the error
+        document.getElementById('userTableBody').innerHTML = `<tr><td colspan="3" style="padding: 14px;">Failed to load users. Check console for details.</td></tr>`;
     }
+}
+
+async function updateUserRole(userId, newRole) {
+     const statusEl = document.getElementById(`status-${userId}`); // Get the status span
+     statusEl.textContent = '⏳ Saving...'; // Show saving message
+     statusEl.style.color = '#aaa'; // Default color
+     try {
+       const res = await fetch('/api/update-role', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ user_id: userId, new_role: newRole })
+       });
+
+       const result = await res.json();
+       
+       if (res.ok) {
+         statusEl.textContent = '✅ Updated';
+         statusEl.style.color = 'lightgreen';
+       } else {
+         statusEl.textContent = `❌ Failed: ${result.error || 'Unknown error'}`;
+         statusEl.style.color = 'salmon';
+       }
+       // Clear the status message after a few seconds
+       setTimeout(() => { statusEl.textContent = ''; }, 3000); 
+
+     } catch (err) {
+       console.error('Error updating role:', err); // Log the error
+       statusEl.textContent = '❌ Error';
+       statusEl.style.color = 'salmon';
+       setTimeout(() => { statusEl.textContent = ''; }, 3000);
+     }
+   }
   </script>
 </body>
 </html>
