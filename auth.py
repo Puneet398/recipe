@@ -72,5 +72,6 @@ def dashboard():
         'family': 'family_dashboard.html',
         'user': 'user_dashboard.html'
     }
-    template = role_templates.get(current_user.role, 'user_dashboard.html')
+    role = current_user.role.strip().lower()
+    template = role_templates.get(role, 'user_dashboard.html')
     return render_template(template, username=current_user.username)
